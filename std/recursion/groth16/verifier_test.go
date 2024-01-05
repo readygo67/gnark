@@ -58,6 +58,7 @@ func (c *InnerCircuitSHA2) Define(api frontend.API) error {
 	return nil
 }
 
+// P*Q =N，N public
 type InnerCircuitEmulation struct {
 	P, Q emulated.Element[emparams.Goldilocks]
 	N    emulated.Element[emparams.Goldilocks] `gnark:",public"`
@@ -90,6 +91,17 @@ func getInner(assert *test.Assert, field *big.Int) (constraint.ConstraintSystem,
 	innerPK, innerVK, err := groth16.Setup(innerCcs)
 	assert.NoError(err)
 
+	//1. 3 * 5 = 15,  proof
+	//2. 15 *6 = A
+	//3. A * B = C
+
+	// Fab
+	// inner : a0 + b0 =c0
+
+	// a1 = b0, b1= c0
+	//  a1+ b1 = c1
+
+	//
 	// inner proof
 	innerAssignment := &InnerCircuitNative{
 		P: 3,

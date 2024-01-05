@@ -8,6 +8,7 @@ import (
 // Element represents a term coefficient data. It is instantiated by the concrete
 // constraint system implementation.
 // Most of the scalar field used in gnark are on 4 uint64, so we have a clear memory overhead here.
+// element 是little-endian
 type Element [6]uint64
 
 // IsZero returns true if coefficient == 0

@@ -235,6 +235,7 @@ func (system *System) AddInternalVariable() (idx int) {
 	return idx
 }
 
+// 增加一个public variable
 func (system *System) AddPublicVariable(name string) (idx int) {
 	idx = system.GetNbPublicVariables()
 	system.Public = append(system.Public, name)
