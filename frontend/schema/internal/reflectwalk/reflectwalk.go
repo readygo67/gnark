@@ -73,7 +73,7 @@ func Walk(data, walker interface{}) (err error) {
 	v := reflect.ValueOf(data)
 	ew, ok := walker.(EnterExitWalker)
 	if ok {
-		err = ew.Enter(WalkLoc)
+		err = ew.Enter(WalkLoc) //进入结构体
 	}
 
 	if err == nil {
@@ -81,7 +81,7 @@ func Walk(data, walker interface{}) (err error) {
 	}
 
 	if ok && err == nil {
-		err = ew.Exit(WalkLoc)
+		err = ew.Exit(WalkLoc) //退出结构体
 	}
 
 	return
@@ -106,6 +106,7 @@ func walk(v reflect.Value, w interface{}) (err error) {
 	pointer := false
 	pointerV := v
 
+	//defer the pointer and interface
 	for {
 		if pointerV.Kind() == reflect.Interface {
 			if iw, ok := w.(InterfaceWalker); ok {

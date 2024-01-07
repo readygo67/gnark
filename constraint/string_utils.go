@@ -5,6 +5,7 @@ import (
 )
 
 // Resolver allows pretty printing of constraints.
+// Resolver 定义了将系数和变量作为string输出的interface
 type Resolver interface {
 	CoeffToString(coeffID int) string
 	VariableToString(variableID int) string
@@ -23,6 +24,7 @@ func NewStringBuilder(r Resolver) *StringBuilder {
 }
 
 // WriteLinearExpression appends the linear expression to the current buffer
+// 将 [2, x] [3, y] 写成 2·x+3·y的线性表达
 func (sbb *StringBuilder) WriteLinearExpression(l LinearExpression) {
 	for i := 0; i < len(l); i++ {
 		sbb.WriteTerm(l[i])

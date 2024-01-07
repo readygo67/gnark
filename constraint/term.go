@@ -19,6 +19,7 @@ import (
 )
 
 // ids of the coefficients with simple values in any cs.coeffs slice.
+
 const (
 	CoeffIdZero = iota
 	CoeffIdOne
@@ -28,6 +29,8 @@ const (
 )
 
 // Term represents a coeff * variable in a constraint system
+//
+//	在R1CS 表达式中 "系数 · 变量"(2·X) 被称为一个term， 实际用"系数ID · 变量ID" 来表示，当变量ID=MaxUint32时，标示一个常量。
 type Term struct {
 	CID, VID uint32
 }

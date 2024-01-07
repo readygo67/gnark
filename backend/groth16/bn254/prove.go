@@ -66,7 +66,7 @@ func Prove(r1cs *cs.R1CS, pk *ProvingKey, fullWitness witness.Witness, opts ...b
 		return nil, fmt.Errorf("new prover config: %w", err)
 	}
 	if opt.HashToFieldFn == nil {
-		opt.HashToFieldFn = hash_to_field.New([]byte(constraint.CommitmentDst))
+		opt.HashToFieldFn = hash_to_field.New([]byte(constraint.CommitmentDst)) //如果为nil，增加一个hash_to_field函数
 	}
 
 	log := logger.Logger().With().Str("curve", r1cs.CurveID().String()).Str("acceleration", "none").Int("nbConstraints", r1cs.GetNbConstraints()).Str("backend", "groth16").Logger()

@@ -55,6 +55,7 @@ type solver struct {
 	q *big.Int
 }
 
+// 在newSolver 中检查
 func newSolver(cs *system, witness fr.Vector, opts ...csolver.Option) (*solver, error) {
 	// parse options
 	opt, err := csolver.NewConfig(opts...)
@@ -70,7 +71,8 @@ func newSolver(cs *system, witness fr.Vector, opts ...csolver.Option) (*solver, 
 
 	nbWires := len(cs.Public) + len(cs.Secret) + cs.NbInternalVariables
 	expectedWitnessSize := len(cs.Public) - witnessOffset + len(cs.Secret)
-
+	fmt.Printf("len(witness):%v, v:%v\n", len(witness), witness)
+	fmt.Printf("expectedWitnessSize:%v\n", expectedWitnessSize)
 	if len(witness) != expectedWitnessSize {
 		return nil, fmt.Errorf("invalid witness size, got %d, expected %d", len(witness), expectedWitnessSize)
 	}
@@ -435,6 +437,7 @@ func (solver *solver) run() error {
 	// start a worker pool
 	// each worker wait on chTasks
 	// a task is a slice of constraint indexes to be solved
+	// 用routine 处理solver.processInstruction
 	for i := 0; i < runtime.NumCPU(); i++ {
 		go func() {
 			var scratch scratch

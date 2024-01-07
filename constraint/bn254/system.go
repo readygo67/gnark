@@ -37,6 +37,7 @@ type R1CS = system
 type SparseR1CS = system
 
 // system is a curved-typed constraint.System with a concrete coefficient table (fr.Element)
+// bn245_system 包括constraint.System和CoeffTable 和field
 type system struct {
 	constraint.System
 	CoeffTable

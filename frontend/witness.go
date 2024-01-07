@@ -1,11 +1,11 @@
 package frontend
 
 import (
-	"math/big"
-	"reflect"
-
+	"fmt"
 	"github.com/consensys/gnark/backend/witness"
 	"github.com/consensys/gnark/frontend/schema"
+	"math/big"
+	"reflect"
 )
 
 // NewWitness build an ordered vector of field elements from the given assignment (Circuit)
@@ -20,6 +20,7 @@ func NewWitness(assignment Circuit, field *big.Int, opts ...WitnessOption) (witn
 	}
 
 	// count the leaves
+	// 计算public/secret各有多少个
 	s, err := schema.Walk(assignment, tVariable, nil)
 	if err != nil {
 		return nil, err
@@ -35,11 +36,12 @@ func NewWitness(assignment Circuit, field *big.Int, opts ...WitnessOption) (witn
 	}
 
 	// write the public | secret values in a chan
-	chValues := make(chan any)
+	chValues := make(chan any, s.Public+s.Secret)
 	go func() {
 		defer close(chValues)
 		schema.Walk(assignment, tVariable, func(leaf schema.LeafInfo, tValue reflect.Value) error {
 			if leaf.Visibility == schema.Public {
+				fmt.Printf("add public:%v, value:%v\n", leaf.FullName(), tValue.Interface())
 				chValues <- tValue.Interface()
 			}
 			return nil
@@ -47,12 +49,14 @@ func NewWitness(assignment Circuit, field *big.Int, opts ...WitnessOption) (witn
 		if !opt.publicOnly {
 			schema.Walk(assignment, tVariable, func(leaf schema.LeafInfo, tValue reflect.Value) error {
 				if leaf.Visibility == schema.Secret {
+					fmt.Printf("add Secret:%v, value:%v\n", leaf.FullName(), tValue.Interface())
 					chValues <- tValue.Interface()
 				}
 				return nil
 			})
 		}
 	}()
+
 	if err := w.Fill(s.Public, s.Secret, chValues); err != nil {
 		return nil, err
 	}

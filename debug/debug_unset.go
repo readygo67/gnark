@@ -3,4 +3,4 @@
 
 package debug
 
-const Debug = false
+const Debug = true

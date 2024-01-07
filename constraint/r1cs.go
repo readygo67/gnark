@@ -14,6 +14,7 @@
 
 package constraint
 
+// R1CS interface在ConstraintSystem基础上z
 type R1CS interface {
 	ConstraintSystem
 
@@ -39,11 +40,12 @@ type R1CIterator struct {
 
 // Next returns the next R1C or nil if end. Caller must not store the result since the
 // same memory space is re-used for subsequent calls to Next.
+// 获取下一个R1C
 func (it *R1CIterator) Next() *R1C {
 	if it.n >= it.cs.GetNbInstructions() {
 		return nil
 	}
-	inst := it.cs.Instructions[it.n]
+	inst := it.cs.Instructions[it.n] //获取
 	it.n++
 	blueprint := it.cs.Blueprints[inst.BlueprintID]
 	if bc, ok := blueprint.(BlueprintR1C); ok {

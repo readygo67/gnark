@@ -55,7 +55,7 @@ func (system *System) InsertWire(wireID uint32, level Level) {
 		panic("wire already exist in instruction tree")
 	}
 
-	system.lbWireLevel[wireID] = level
+	system.lbWireLevel[wireID] = level //lbWireLevel下标为内部变量的id = level
 }
 
 // internalWireOffset returns the position of the first internal wire in the wireIDs.

@@ -2,6 +2,7 @@ package groth16_test
 
 import (
 	"fmt"
+	"github.com/consensys/gnark/test"
 	"math/big"
 	"testing"
 
@@ -79,7 +80,7 @@ func computeInnerProof(field *big.Int) (constraint.ConstraintSystem, groth16.Ver
 type OuterCircuit[FR emulated.FieldParams, G1El algebra.G1ElementT, G2El algebra.G2ElementT, GtEl algebra.GtElementT] struct {
 	Proof        stdgroth16.Proof[G1El, G2El]
 	VerifyingKey stdgroth16.VerifyingKey[G1El, G2El, GtEl]
-	InnerWitness stdgroth16.Witness[FR] `gnark:",public"`
+	InnerWitness stdgroth16.Witness[FR]
 }
 
 func (c *OuterCircuit[FR, G1El, G2El, GtEl]) Define(api frontend.API) error {
@@ -168,6 +169,7 @@ func Example_emulated() {
 }
 
 // Example of verifying recursively BN254 Groth16 proof in BN254 Groth16 circuit using field emulation
+// TestRSACircuit is success
 func TestRSACircuit(t *testing.T) {
 	// compute the proof which we want to verify recursively
 	innerCcs, innerVK, innerWitness, innerProof := computeInnerProof(ecc.BN254.ScalarField())
@@ -236,4 +238,132 @@ func TestRSACircuit(t *testing.T) {
 	if err != nil {
 		panic("circuit verification failed: " + err.Error())
 	}
+}
+
+/*
+TestRSACircuit_1 profile
+inner Circuit numConstraints:4, numWitness:2, numInstance:2
+outer Circuit numConstraints:1749435, numWitness:128, numInstance:5
+*/
+func TestRSACircuit_1(t *testing.T) {
+	assert := test.NewAssert(t)
+	// compute the proof which we want to verify recursively
+	innerCcs, innerVK, innerWitness, innerProof := computeInnerProof(ecc.BN254.ScalarField())
+
+	numConstraints := innerCcs.GetNbConstraints()
+	numWitness := innerCcs.GetNbSecretVariables()
+	numInstance := innerCcs.GetNbPublicVariables()
+	fmt.Printf("inner Circuit numConstraints:%v, numWitness:%v, numInstance:%v\n", numConstraints, numWitness, numInstance)
+
+	// initialize the witness elements
+	circuitVk, err := stdgroth16.ValueOfVerifyingKey[sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl](innerVK)
+	assert.NoError(err)
+	circuitWitness, err := stdgroth16.ValueOfWitness[sw_bn254.ScalarField](innerWitness)
+	assert.NoError(err)
+	circuitProof, err := stdgroth16.ValueOfProof[sw_bn254.G1Affine, sw_bn254.G2Affine](innerProof)
+	assert.NoError(err)
+
+	outerAssignment := &OuterCircuit[sw_bn254.ScalarField, sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl]{
+		InnerWitness: circuitWitness,
+		Proof:        circuitProof,
+		VerifyingKey: circuitVk,
+	}
+
+	// the witness size depends on the number of public variables. We use the
+	// compiled inner circuit to deduce the required size for the outer witness
+	// using functions [stdgroth16.PlaceholderWitness] and
+	// [stdgroth16.PlaceholderVerifyingKey]
+	outerCircuit := &OuterCircuit[sw_bn254.ScalarField, sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl]{
+		InnerWitness: stdgroth16.PlaceholderWitness[sw_bn254.ScalarField](innerCcs),
+		VerifyingKey: stdgroth16.PlaceholderVerifyingKey[sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl](innerCcs),
+	}
+
+	// compile the outer circuit
+	outerCcs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, outerCircuit)
+
+	// create Groth16 setup. NB! UNSAFE
+	outerPk, outerVk, err := groth16.Setup(outerCcs) // UNSAFE! Use MPC
+	assert.NoError(err)
+
+	// create prover witness from the assignment
+	outerWitness, err := frontend.NewWitness(outerAssignment, ecc.BN254.ScalarField())
+	assert.NoError(err)
+	// create public witness from the assignment
+	publicWitness, err := outerWitness.Public()
+	assert.NoError(err)
+
+	// construct the groth16 proof of verifying Groth16 proof in-circuit
+	outerProof, err := groth16.Prove(outerCcs, outerPk, outerWitness)
+	assert.NoError(err)
+
+	// verify the Groth16 proof
+	err = groth16.Verify(outerProof, outerVk, publicWitness)
+	assert.NoError(err)
+
+	numConstraints = outerCcs.GetNbConstraints()
+	numWitness = outerCcs.GetNbSecretVariables()
+	numInstance = outerCcs.GetNbPublicVariables()
+	fmt.Printf("outer Circuit numConstraints:%v, numWitness:%v, numInstance:%v\n", numConstraints, numWitness, numInstance)
+}
+
+// @@@@@Keep sync with backend/witness/witness.go
+func TestRSACircuit_2(t *testing.T) {
+	assert := test.NewAssert(t)
+	// compute the proof which we want to verify recursively
+	innerCcs, innerVK, innerWitness, innerProof := computeInnerProof(ecc.BN254.ScalarField())
+
+	numConstraints := innerCcs.GetNbConstraints()
+	numWitness := innerCcs.GetNbSecretVariables()
+	numInstance := innerCcs.GetNbPublicVariables()
+	fmt.Printf("inner Circuit numConstraints:%v, numWitness:%v, numInstance:%v\n", numConstraints, numWitness, numInstance)
+
+	// initialize the witness elements
+	circuitVk, err := stdgroth16.ValueOfVerifyingKey[sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl](innerVK)
+	assert.NoError(err)
+	circuitWitness, err := stdgroth16.ValueOfWitness[sw_bn254.ScalarField](innerWitness)
+	assert.NoError(err)
+	circuitProof, err := stdgroth16.ValueOfProof[sw_bn254.G1Affine, sw_bn254.G2Affine](innerProof)
+	assert.NoError(err)
+
+	outerAssignment := &OuterCircuit[sw_bn254.ScalarField, sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl]{
+		InnerWitness: circuitWitness,
+		Proof:        circuitProof,
+		VerifyingKey: circuitVk,
+	}
+
+	// the witness size depends on the number of public variables. We use the
+	// compiled inner circuit to deduce the required size for the outer witness
+	// using functions [stdgroth16.PlaceholderWitness] and
+	// [stdgroth16.PlaceholderVerifyingKey]
+	outerCircuit := &OuterCircuit[sw_bn254.ScalarField, sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl]{
+		InnerWitness: stdgroth16.PlaceholderWitness[sw_bn254.ScalarField](innerCcs),
+		VerifyingKey: stdgroth16.PlaceholderVerifyingKey[sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl](innerCcs),
+	}
+
+	// compile the outer circuit
+	outerCcs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, outerCircuit)
+
+	// create Groth16 setup. NB! UNSAFE
+	outerPk, outerVk, err := groth16.Setup(outerCcs) // UNSAFE! Use MPC
+	assert.NoError(err)
+
+	// create prover witness from the assignment
+	outerWitness, err := frontend.NewWitness(outerAssignment, ecc.BN254.ScalarField())
+	assert.NoError(err)
+	// create public witness from the assignment
+	outerPublicWitness, err := outerWitness.Public()
+	assert.NoError(err)
+
+	// construct the groth16 proof of verifying Groth16 proof in-circuit
+	outerProof, err := groth16.Prove(outerCcs, outerPk, outerWitness)
+	assert.NoError(err)
+
+	// verify the Groth16 proof
+	err = groth16.Verify(outerProof, outerVk, outerPublicWitness)
+	assert.NoError(err)
+
+	numConstraints = outerCcs.GetNbConstraints()
+	numWitness = outerCcs.GetNbSecretVariables()
+	numInstance = outerCcs.GetNbPublicVariables()
+	fmt.Printf("outer Circuit numConstraints:%v, numWitness:%v, numInstance:%v\n", numConstraints, numWitness, numInstance)
 }

@@ -59,7 +59,6 @@ func Compile(field *big.Int, newBuilder NewBuilder, circuit Circuit, opts ...Com
 		return nil, fmt.Errorf("parse circuit: %w", err)
 
 	}
-
 	// compile the circuit into its final form
 	return builder.Compile()
 }
@@ -80,6 +79,7 @@ func parseCircuit(builder Builder, circuit Circuit) (err error) {
 
 	// leaf handlers are called when encoutering leafs in the circuit data struct
 	// leafs are Constraints that need to be initialized in the context of compiling a circuit
+	// 对于targetVisibility 执行操作
 	variableAdder := func(targetVisibility schema.Visibility) func(f schema.LeafInfo, tInput reflect.Value) error {
 		return func(f schema.LeafInfo, tInput reflect.Value) error {
 			if tInput.CanSet() {
@@ -101,13 +101,13 @@ func parseCircuit(builder Builder, circuit Circuit) (err error) {
 	}
 
 	// add public inputs first to compute correct offsets
-	_, err = schema.Walk(circuit, tVariable, variableAdder(schema.Public))
+	_, err = schema.Walk(circuit, tVariable, variableAdder(schema.Public)) //执行到这一步，在builder.cs.System.Public增加pulic变量
 	if err != nil {
 		return err
 	}
 
 	// add secret inputs
-	_, err = schema.Walk(circuit, tVariable, variableAdder(schema.Secret))
+	_, err = schema.Walk(circuit, tVariable, variableAdder(schema.Secret)) //执行到这一步，在builder.cs.System.Secret增加secret变量
 	if err != nil {
 		return err
 	}
@@ -159,6 +159,7 @@ type CompileConfig struct {
 // WithCapacity is a compile option that specifies the estimated capacity needed
 // for internal variables and constraints. If not set, then the initial capacity
 // is 0 and is dynamically allocated as needed.
+// 预估的内部变量和约束的容量
 func WithCapacity(capacity int) CompileOption {
 	return func(opt *CompileConfig) error {
 		opt.Capacity = capacity
@@ -173,6 +174,7 @@ func WithCapacity(capacity int) CompileOption {
 // This option is useful for debugging circuits, but should not be used in
 // production settings as it means that there is a potential error in the
 // circuit definition or that it is possible to optimize witness size.
+// 允许不受约束的变量作为输入
 func IgnoreUnconstrainedInputs() CompileOption {
 	return func(opt *CompileConfig) error {
 		opt.IgnoreUnconstrainedInputs = true
@@ -203,6 +205,7 @@ func WithCompressThreshold(threshold int) CompileOption {
 	}
 }
 
+// 使用反射（reflect）来初始化一个全局变量 tVariable。其主要目的是获取一个结构体字段的类型，然后将该类型赋值给 tVariable
 var tVariable reflect.Type
 
 func init() {

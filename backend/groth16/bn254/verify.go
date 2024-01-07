@@ -50,7 +50,7 @@ func Verify(proof *Proof, vk *VerifyingKey, publicWitness fr.Vector, opts ...bac
 	}
 
 	nbPublicVars := len(vk.G1.K) - len(vk.PublicAndCommitmentCommitted)
-
+	fmt.Printf("len(publicWitness):%v, nbPublicVars: %d\n", len(publicWitness), nbPublicVars)
 	if len(publicWitness) != nbPublicVars-1 {
 		return fmt.Errorf("invalid witness size, got %d, expected %d (public - ONE_WIRE)", len(publicWitness), len(vk.G1.K)-1)
 	}

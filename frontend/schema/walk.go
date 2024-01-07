@@ -14,7 +14,7 @@ import (
 // It returns the number of secret and public leafs encountered during the walk.
 func Walk(circuit interface{}, tLeaf reflect.Type, handler LeafHandler) (count LeafCount, err error) {
 	w := walker{
-		target:      tLeaf,
+		target:      tLeaf, //walker 记录需要处理的类型，以及该类型的slice.
 		targetSlice: reflect.SliceOf(tLeaf),
 		handler:     handler,
 	}
@@ -37,6 +37,8 @@ func Walk(circuit interface{}, tLeaf reflect.Type, handler LeafHandler) (count L
 //		Struct(reflect.Value) error
 //		StructField(reflect.StructField, reflect.Value) error
 //	}
+//
+// walker 是gnark中用于遍历circuit 类型， 它实现了interface
 type walker struct {
 	handler            LeafHandler
 	target             reflect.Type
@@ -121,6 +123,7 @@ func (w *walker) ArrayElem(index int, v reflect.Value) error {
 
 // process an array or slice of leaves; since it's quite common to have large array/slices
 // of frontend.Variable, this speeds up considerably performance.
+// 处理数组或者切片
 func (w *walker) handleLeaves(value reflect.Value) error {
 	v := w.visibility()
 	if v == Unset {
@@ -131,10 +134,10 @@ func (w *walker) handleLeaves(value reflect.Value) error {
 	if w.handler != nil {
 		n := w.name()
 		for i := 0; i < value.Len(); i++ {
-			fName := func() string {
+			fName := func() string { //元素的名字 = slice的名字 + "_" + index
 				return n + "_" + strconv.Itoa(i)
 			}
-			vv := value.Index(i)
+			vv := value.Index(i) //获取该元素的值
 			if err := w.handler(LeafInfo{Visibility: v, FullName: fName, name: ""}, vv); err != nil {
 				return err
 			}
@@ -250,6 +253,7 @@ func (w *walker) name() string {
 	return sbb.String()
 }
 
+// 用slice 模拟堆栈
 type pathStack []LeafInfo
 
 func (s *pathStack) len() int {

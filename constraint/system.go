@@ -8,6 +8,7 @@ import (
 	"github.com/consensys/gnark/constraint/solver"
 )
 
+// constraint/system.go 定义了ConstraintSystem interface, 在core.go/System中实现了这些方法， 在 在bn254/system.go 的system 包含了core.go中的System
 // ConstraintSystem interface that all constraint systems implement.
 type ConstraintSystem interface {
 	io.WriterTo

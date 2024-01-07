@@ -120,7 +120,7 @@ func (builder *builder) add(vars []expr.LinearExpression, sub bool, capacity int
 	for lID, v := range vars {
 		builder.heap = append(builder.heap, linMeta{val: v[0].VID, lID: lID})
 	}
-	builder.heap.heapify()
+	builder.heap.heapify() //按照val的大小形成一个minHeap
 
 	if res == nil {
 		t := make(expr.LinearExpression, 0, capacity)
@@ -206,7 +206,7 @@ func (builder *builder) Mul(i1, i2 frontend.Variable, in ...frontend.Variable) f
 		// v1 and v2 are both unknown, this is the only case we add a constraint
 		if !v1Constant && !v2Constant {
 			res := builder.newInternalVariable()
-			builder.cs.AddR1C(builder.newR1C(v1, v2, res), builder.genericGate)
+			builder.cs.AddR1C(builder.newR1C(v1, v2, res), builder.genericGate) //builder.newR1C(v1, v2, res) 构建一条R1CS约束,  builder.cs.AddR1C 将新建的R1CS约束加到cs.CallData和Instructions中去
 			return res
 		}
 

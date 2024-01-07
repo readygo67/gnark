@@ -24,9 +24,11 @@ import (
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 )
 
+// 这里有两个constraint.Element([6]uint64) 和fr.Element([4]uint64)
+// 基本思路时间constraint.Element cast成fr.Element, 然后计算
 // CoeffTable ensure we store unique coefficients in the constraint system
 type CoeffTable struct {
-	Coefficients []fr.Element
+	Coefficients []fr.Element          //使用下标做索引，
 	mCoeffs      map[fr.Element]uint32 // maps coefficient to coeffID
 }
 
@@ -62,7 +64,7 @@ func (ct *CoeffTable) AddCoeff(coeff constraint.Element) uint32 {
 	} else {
 		cc := *c
 		if id, ok := ct.mCoeffs[cc]; ok {
-			cID = id
+			cID = id //如果这个element已经存在，直接返回它的id，id就是数组的下标
 		} else {
 			cID = uint32(len(ct.Coefficients))
 			ct.Coefficients = append(ct.Coefficients, cc)
@@ -79,7 +81,7 @@ func (ct *CoeffTable) MakeTerm(coeff constraint.Element, variableID int) constra
 
 // CoeffToString implements constraint.Resolver
 func (ct *CoeffTable) CoeffToString(cID int) string {
-	return ct.Coefficients[cID].String()
+	return ct.Coefficients[cID].String() //从id 获取系数的值并用文字表示，例如100 的string 就是"100"
 }
 
 // implements constraint.Field

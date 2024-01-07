@@ -48,6 +48,7 @@ import (
 
 // NewBuilder returns a new R1CS builder which implements frontend.API.
 // Additionally, this builder also implements [frontend.Committer].
+// 返回r1cs.NewBuild
 func NewBuilder(field *big.Int, config frontend.CompileConfig) (frontend.Builder, error) {
 	return newBuilder(field, config), nil
 }
@@ -61,8 +62,8 @@ type builder struct {
 	mtBooleans map[uint64][]expr.LinearExpression
 
 	tOne        constraint.Element
-	eZero, eOne expr.LinearExpression
-	cZero, cOne constraint.LinearExpression
+	eZero, eOne expr.LinearExpression       //expression zero和 one
+	cZero, cOne constraint.LinearExpression //constraint zero and one
 
 	// helps merge k sorted linear expressions
 	heap minHeap
@@ -91,7 +92,7 @@ func newBuilder(field *big.Int, config frontend.CompileConfig) *builder {
 	}
 
 	// by default the circuit is given a public wire equal to 1
-
+	// 从输入的Moduls 获取对应的曲线ID
 	curve := utils.FieldToCurve(field)
 
 	switch curve {
@@ -118,7 +119,7 @@ func newBuilder(field *big.Int, config frontend.CompileConfig) *builder {
 	}
 
 	builder.tOne = builder.cs.One()
-	builder.cs.AddPublicVariable("1")
+	builder.cs.AddPublicVariable("1") //1 必须有的公共变量
 
 	builder.genericGate = builder.cs.AddBlueprint(&constraint.BlueprintGenericR1C{})
 
@@ -422,7 +423,7 @@ func assertIsSet(l expr.LinearExpression) {
 
 	if debug.Debug {
 		// frontend/ package must build linear expressions that are sorted.
-		if !sort.IsSorted(l) {
+		if !sort.IsSorted(l) { //假设expression是由多个term组成的话，那么这些term要排序
 			panic("unsorted linear expression")
 		}
 	}

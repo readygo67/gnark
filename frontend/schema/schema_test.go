@@ -260,7 +260,7 @@ func BenchmarkArrayOfSliceOfStructSchema(b *testing.B) {
 
 }
 
-var tVariable reflect.Type
+var tVariable reflect.Type //tVariable 是下方
 
 func init() {
 	tVariable = reflect.ValueOf(struct{ A variable }{}).FieldByName("A").Type()

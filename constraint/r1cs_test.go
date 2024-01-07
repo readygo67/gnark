@@ -2,12 +2,13 @@ package constraint_test
 
 import (
 	"fmt"
-
 	"github.com/consensys/gnark-crypto/ecc"
 	"github.com/consensys/gnark/constraint"
 	cs "github.com/consensys/gnark/constraint/bn254"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
+	"reflect"
+	"testing"
 )
 
 func ExampleR1CS_GetR1Cs() {
@@ -69,9 +70,25 @@ func ExampleR1CS_GetR1Cs() {
 	// Y ⋅ 1 == 5 + X + v1
 }
 
+type cubic struct {
+	X frontend.Variable
+	Y frontend.Variable `gnark:",public"`
+}
+
+// Define declares the circuit constraints
+// x**3 + x + 5 == y
+func (circuit *cubic) Define(api frontend.API) error {
+	x3 := api.Mul(circuit.X, circuit.X, circuit.X)
+	api.AssertIsEqual(circuit.Y, api.Add(x3, circuit.X, 5))
+	return nil
+}
+
 func ExampleR1CS_Solve() {
 	// build a constraint system and a witness;
 	ccs, _ := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &cubic{})
+	fmt.Printf("NbConstraints:%v, NbInstructions:%v\n", ccs.GetNbConstraints(), ccs.GetNbInstructions())
+	fmt.Printf("NbPublic:%v, NbSecret:%v, NbInternal:%v\n", ccs.GetNbPublicVariables(), ccs.GetNbSecretVariables(), ccs.GetNbInternalVariables())
+
 	w, _ := frontend.NewWitness(&cubic{X: 3, Y: 35}, ecc.BN254.ScalarField())
 
 	_solution, _ := ccs.Solve(w)
@@ -86,20 +103,38 @@ func ExampleR1CS_Solve() {
 
 	// Output:
 	// 1
-	// 3
 	// 35
+	// 3
 	// 9
 	// 27
 }
 
-type cubic struct {
-	X, Y frontend.Variable
+func TestCubicCircuit_Compile(t *testing.T) {
+	// build a constraint system and a witness;
+	ccs, _ := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &cubic{})
+	fmt.Printf("NbConstraints:%v, NbInstructions:%v\n", ccs.GetNbConstraints(), ccs.GetNbInstructions())
+	fmt.Printf("NbPublic:%v, NbSecret:%v, NbInternal:%v\n", ccs.GetNbPublicVariables(), ccs.GetNbSecretVariables(), ccs.GetNbInternalVariables())
+
+	w, _ := frontend.NewWitness(&cubic{X: 3, Y: 35}, ecc.BN254.ScalarField())
+
+	_solution, _ := ccs.Solve(w)
+
+	// concrete solution
+	solution := _solution.(*cs.R1CSSolution)
+
+	// solution vector should have [1, 3, 35, 9, 27]
+	for _, v := range solution.W {
+		fmt.Println(v.String())
+	}
+
 }
 
-// Define declares the circuit constraints
-// x**3 + x + 5 == y
-func (circuit *cubic) Define(api frontend.API) error {
-	x3 := api.Mul(circuit.X, circuit.X, circuit.X)
-	api.AssertIsEqual(circuit.Y, api.Add(x3, circuit.X, 5))
-	return nil
+func TestGetTypeByReflect(t *testing.T) {
+	//使用反射（reflect）来初始化一个全局变量 tVariable。其主要目的是获取一个结构体字段的类型，然后将该类型赋值给 tVariable
+	var tVariable reflect.Type
+	type Variable interface{}
+
+	v := reflect.ValueOf(struct{ A Variable }{})
+	tVariable = v.FieldByName("A").Type()
+	fmt.Println(tVariable)
 }

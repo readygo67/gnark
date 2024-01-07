@@ -93,8 +93,13 @@ type Witness interface {
 	// Will allocate the underlying vector with nbPublic + nbSecret elements.
 	// This is typically call by internal APIs to fill the vector by walking a structure.
 	Fill(nbPublic, nbSecret int, values <-chan any) error
+
+	NbSecret() uint32
+
+	NbPublic() uint32
 }
 
+// witness的结构体，
 type witness struct {
 	vector             any
 	nbPublic, nbSecret uint32
@@ -112,6 +117,7 @@ func New(field *big.Int) (Witness, error) {
 	}, nil
 }
 
+// 填充witness 的vector
 func (w *witness) Fill(nbPublic, nbSecret int, values <-chan any) error {
 	n := nbPublic + nbSecret
 	w.vector = resize(w.vector, n)
@@ -122,6 +128,7 @@ func (w *witness) Fill(nbPublic, nbSecret int, values <-chan any) error {
 
 	// note; this shouldn't be perf critical but if it is we could have 2 input chan and
 	// fill public and secret values concurrently.
+	// 使用range方法，当通道关闭后会退出for range循环
 	for v := range values {
 		if i >= n {
 			// we panic here; shouldn't happen and if it does we may leek a chan + producer go routine
@@ -137,6 +144,7 @@ func (w *witness) Fill(nbPublic, nbSecret int, values <-chan any) error {
 		i++
 	}
 
+	//通道关闭后，检查收到的值和预期的值是否一致
 	if i != n {
 		return fmt.Errorf("expected %d values, filled only %d", n, i)
 	}
@@ -385,4 +393,12 @@ func (w *witness) FromJSON(s *schema.Schema, data []byte) error {
 	}()
 
 	return w.Fill(s.NbPublic, s.NbSecret, chValues)
+}
+
+func (w *witness) NbSecret() uint32 {
+	return w.nbSecret
+}
+
+func (w *witness) NbPublic() uint32 {
+	return w.nbPublic
 }

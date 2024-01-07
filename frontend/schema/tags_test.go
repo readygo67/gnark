@@ -2,6 +2,7 @@ package schema
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -160,5 +161,44 @@ func TestStructTags(t *testing.T) {
 		expected["A_1"] = Public
 		t.Run("slice", func(t *testing.T) { testParseTags(t, &s, expected) })
 	}
+}
+
+//var tType reflect.Type //tVariable 是下方
+//
+//func init() {
+//	tType = reflect.ValueOf(struct{ A uint8 }{}).FieldByName("A").Type()
+//}
+
+func TestWalk(t *testing.T) {
+	assert := require.New(t)
+
+	type Child struct {
+		X variable
+		Y [2]variable
+	}
+
+	s := struct {
+		A variable `gnark:",public"`
+		B variable
+		C [10]variable
+		D []variable `gnark:",public"`
+		E Child      `gnark:",public"`
+	}{}
+	s.D = make([]variable, 4)
+
+	collected := make(map[string]Visibility)
+	collectHandler := func(f LeafInfo, _ reflect.Value) error {
+		n := f.FullName()
+		if _, ok := collected[n]; ok {
+			return errors.New("duplicate name collected")
+		}
+		collected[n] = f.Visibility
+		return nil
+	}
+
+	count, err := Walk(s, tVariable, collectHandler)
+	assert.NoError(err)
+	fmt.Printf("%#v\n", count)
+	fmt.Printf("%#v\n", collected)
 
 }

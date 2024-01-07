@@ -25,6 +25,10 @@ const (
 	SystemSparseR1CS
 )
 
+// PakedInstruction 记录了恢复instr 所需要的信息，和cs.CallData
+// ConstraintOffset 记录本instruction 对应的起始 constraint 的ID，在R1CS中通常一个instr 对应一个约束
+// WireOffset 记录了本instruction 需要产生新的interanal variable时，对应的起始interanal variable起始ID
+// StartCallData 记录了本instruction 对应的data 在 cs.CallData的起始位置
 // PackedInstruction is the lowest element of a constraint system. It stores just enough data to
 // reconstruct a constraint of any shape or a hint at solving time.
 type PackedInstruction struct {
@@ -49,13 +53,14 @@ type PackedInstruction struct {
 }
 
 // Unpack returns the instruction corresponding to the packed instruction.
+// Unpack的作用是从cs.CallData中获取instr 具体信息，即根据pi.StartCallData 获得CallData，并组装成Instrution返回
 func (pi PackedInstruction) Unpack(cs *System) Instruction {
 
 	blueprint := cs.Blueprints[pi.BlueprintID]
 	cSize := blueprint.CalldataSize()
 	if cSize < 0 {
 		// by convention, we store nbInputs < 0 for non-static input length.
-		cSize = int(cs.CallData[pi.StartCallData])
+		cSize = int(cs.CallData[pi.StartCallData]) //获取inst 在CallData中的起始位置，该位置的值就是instruction的长度
 	}
 
 	return Instruction{
@@ -81,9 +86,9 @@ type System struct {
 
 	Type SystemType
 
-	Instructions []PackedInstruction
+	Instructions []PackedInstruction //
 	Blueprints   []Blueprint
-	CallData     []uint32 // huge slice.
+	CallData     []uint32 // huge slice, CallData 由Instr的CallData组成，
 
 	// can be != than len(instructions)
 	NbConstraints int
@@ -92,7 +97,7 @@ type System struct {
 	NbInternalVariables int
 
 	// input wires names
-	Public, Secret []string
+	Public, Secret []string // 数组下标表示是第几个变量，数组元素表示变量名，实际是index => string的map
 
 	// logs (added with system.Println, resolved when solver sets a value to a wire)
 	Logs []LogEntry
@@ -114,14 +119,14 @@ type System struct {
 	// TODO @gbotrel these are currently updated after we add a constraint.
 	// but in case the object is built from a serialized representation
 	// we need to init the level builder lbWireLevel from the existing constraints.
-	Levels [][]int
+	Levels [][]int //?? 用途是什么？
 
 	// scalar field
 	q      *big.Int `cbor:"-"`
 	bitLen int      `cbor:"-"`
 
 	// level builder
-	lbWireLevel []Level `cbor:"-"` // at which level we solve a wire. init at -1.
+	lbWireLevel []Level `cbor:"-"` // at which level we solve a wire. init at -1. 它的作用是什么？
 
 	CommitmentInfo Commitments
 	GkrInfo        GkrInfo
@@ -228,7 +233,7 @@ func (system *System) AddInternalVariable() (idx int) {
 	idx = system.NbInternalVariables + system.GetNbPublicVariables() + system.GetNbSecretVariables()
 	system.NbInternalVariables++
 	// also grow the level slice
-	system.lbWireLevel = append(system.lbWireLevel, LevelUnset)
+	system.lbWireLevel = append(system.lbWireLevel, LevelUnset) //lbWireLevel[idx-system.internalWireOffset()] = LevelUnset, 添加一个内部变量，并将它的wirelevel设置为unset
 	if debug.Debug && len(system.lbWireLevel) != system.NbInternalVariables {
 		panic("internal error")
 	}
@@ -329,6 +334,7 @@ func (system *System) AttachDebugInfo(debugInfo DebugInfo, constraintID []int) {
 }
 
 // VariableToString implements Resolver
+// 根据cs中的vID返回对应的变量名称
 func (system *System) VariableToString(vID int) string {
 	nbPublic := system.GetNbPublicVariables()
 	nbSecret := system.GetNbSecretVariables()
@@ -384,9 +390,9 @@ func (cs *System) AddSparseR1C(c SparseR1C, bID BlueprintID) int {
 func (cs *System) AddInstruction(bID BlueprintID, calldata []uint32) []uint32 {
 	// set the offsets
 	pi := PackedInstruction{
-		StartCallData:    uint64(len(cs.CallData)),
-		ConstraintOffset: uint32(cs.NbConstraints),
-		WireOffset:       uint32(cs.NbInternalVariables + cs.GetNbPublicVariables() + cs.GetNbSecretVariables()),
+		StartCallData:    uint64(len(cs.CallData)),                                                               // 记录每一个instr 在cs.CallData开始的位置
+		ConstraintOffset: uint32(cs.NbConstraints),                                                               //记录本instr在是cs中第几条instruction
+		WireOffset:       uint32(cs.NbInternalVariables + cs.GetNbPublicVariables() + cs.GetNbSecretVariables()), //记录本instr 如果产生新的internal variable，是从第几个internal variable开始
 		BlueprintID:      bID,
 	}
 
@@ -395,11 +401,11 @@ func (cs *System) AddInstruction(bID BlueprintID, calldata []uint32) []uint32 {
 
 	// update the total number of constraints
 	blueprint := cs.Blueprints[pi.BlueprintID]
-	cs.NbConstraints += blueprint.NbConstraints()
+	cs.NbConstraints += blueprint.NbConstraints() // blueprint.NbConstraints() 表示每增加一条inst 会增加几条约束，对于R1CS而言，这个值是1
 
 	// add the output wires
 	inst := pi.Unpack(cs)
-	nbOutputs := blueprint.NbOutputs(inst)
+	nbOutputs := blueprint.NbOutputs(inst) //blueprint.NbOutputs 表示增加一个instr，新创造了几个输出，用internal variable表示
 	var wires []uint32
 	for i := 0; i < nbOutputs; i++ {
 		wires = append(wires, uint32(cs.AddInternalVariable()))
@@ -410,13 +416,13 @@ func (cs *System) AddInstruction(bID BlueprintID, calldata []uint32) []uint32 {
 
 	// update the instruction dependency tree
 	level := blueprint.UpdateInstructionTree(inst, cs)
-	iID := len(cs.Instructions) - 1
+	iID := len(cs.Instructions) - 1 //iID，instruction ID
 
 	// we can't skip levels, so appending is fine.
 	if int(level) >= len(cs.Levels) {
-		cs.Levels = append(cs.Levels, []int{iID})
+		cs.Levels = append(cs.Levels, []int{iID}) //新增一个level，将这个ID 放到levels中去，
 	} else {
-		cs.Levels[level] = append(cs.Levels[level], iID)
+		cs.Levels[level] = append(cs.Levels[level], iID) //否则将这个ID放到已经有的level中去
 	}
 
 	return wires

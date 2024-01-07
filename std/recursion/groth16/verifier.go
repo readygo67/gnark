@@ -103,6 +103,7 @@ type VerifyingKey[G1El algebra.G1ElementT, G2El algebra.G2ElementT, GtEl algebra
 // constraint system. The size of the verifying key depends on the number of
 // public inputs and commitments used, this method allocates sufficient space
 // regardless of the actual verifying key.
+// 给VerifyingKey.G1.K 分配空间, 分配的空间为8 * innerCircuitPublicVariables(), 1个G1point = {x坐标, y坐标}, 一个坐标=4
 func PlaceholderVerifyingKey[G1El algebra.G1ElementT, G2El algebra.G2ElementT, GtEl algebra.GtElementT](ccs constraint.ConstraintSystem) VerifyingKey[G1El, G2El, GtEl] {
 	return VerifyingKey[G1El, G2El, GtEl]{
 		G1: struct{ K []G1El }{
@@ -368,9 +369,11 @@ type Witness[FR emulated.FieldParams] struct {
 // PlaceholderWitness creates a stub witness which can be used to allocate the
 // variables in the circuit if the actual witness is not yet known. It takes
 // into account the number of public inputs and number of used commitments.
+// 给Witness.Public 分配空间 = 4 * (innerCircuitPublicVariables - 1)
 func PlaceholderWitness[FR emulated.FieldParams](ccs constraint.ConstraintSystem) Witness[FR] {
+	nbInnerCircuitPublicVariables := ccs.GetNbPublicVariables()
 	return Witness[FR]{
-		Public: make([]emulated.Element[FR], ccs.GetNbPublicVariables()-1),
+		Public: make([]emulated.Element[FR], nbInnerCircuitPublicVariables-1),
 	}
 }
 
