@@ -18,6 +18,7 @@ package groth16
 
 import (
 	"errors"
+	"fmt"
 	"github.com/consensys/gnark-crypto/ecc"
 	curve "github.com/consensys/gnark-crypto/ecc/bn254"
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
@@ -99,19 +100,20 @@ func Setup(r1cs *cs.R1CS, pk *ProvingKey, vk *VerifyingKey) error {
 	commitmentInfo := r1cs.CommitmentInfo.(constraint.Groth16Commitments)
 	commitmentWires := commitmentInfo.CommitmentIndexes()
 	privateCommitted := commitmentInfo.GetPrivateCommitted()
-	nbPrivateCommittedWires := internal.NbElements(privateCommitted)
+	nbPrivateCommittedWires := internal.NbElements(privateCommitted) //privateCommitted 表示以element计数的privatecommitted的数量
 
 	// a commitment is itself defined by a hint so the prover considers it private
 	// but the verifier will need to inject the value itself so on the groth16
 	// level it must be considered public
 	nbPublicWires := r1cs.GetNbPublicVariables() + len(commitmentInfo)
+	fmt.Printf("nbPublicWires: %v = nbPulicVariables:%v + len(commitmentInfo):%v\n", nbPublicWires, r1cs.GetNbPublicVariables(), len(commitmentInfo))
 	nbPrivateWires := r1cs.GetNbSecretVariables() + r1cs.NbInternalVariables - nbPrivateCommittedWires - len(commitmentInfo)
 
 	// Setting group for fft
-	domain := fft.NewDomain(uint64(r1cs.GetNbConstraints()))
+	domain := fft.NewDomain(uint64(r1cs.GetNbConstraints())) //设置fft的domain
 
 	// samples toxic waste
-	toxicWaste, err := sampleToxicWaste()
+	toxicWaste, err := sampleToxicWaste() //产生t，alpha, beta, gamma, delta等随机数
 	if err != nil {
 		return err
 	}
@@ -237,8 +239,8 @@ func Setup(r1cs *cs.R1CS, pk *ProvingKey, vk *VerifyingKey) error {
 	pk.NbInfinityB = uint64(nbWires - n)
 
 	// compute our batch scalar multiplication with g1 elements
-	g1Scalars := make([]fr.Element, 0, (nbWires*3)+int(domain.Cardinality)+3)
-	g1Scalars = append(g1Scalars, toxicWaste.alpha, toxicWaste.beta, toxicWaste.delta)
+	g1Scalars := make([]fr.Element, 0, (nbWires*3)+int(domain.Cardinality)+3)          //容量为22.
+	g1Scalars = append(g1Scalars, toxicWaste.alpha, toxicWaste.beta, toxicWaste.delta) //感觉在计算承诺
 	g1Scalars = append(g1Scalars, A...)
 	g1Scalars = append(g1Scalars, B...)
 	g1Scalars = append(g1Scalars, Z...)
@@ -248,12 +250,12 @@ func Setup(r1cs *cs.R1CS, pk *ProvingKey, vk *VerifyingKey) error {
 		g1Scalars = append(g1Scalars, ckK[i]...)
 	}
 
-	g1PointsAff := curve.BatchScalarMultiplicationG1(&g1, g1Scalars)
+	g1PointsAff := curve.BatchScalarMultiplicationG1(&g1, g1Scalars) //将g1 batch 标量乘, scalar
 
 	// sets pk: [α]₁, [β]₁, [δ]₁
-	pk.G1.Alpha = g1PointsAff[0]
-	pk.G1.Beta = g1PointsAff[1]
-	pk.G1.Delta = g1PointsAff[2]
+	pk.G1.Alpha = g1PointsAff[0] //[α]₁
+	pk.G1.Beta = g1PointsAff[1]  //[β]₁
+	pk.G1.Delta = g1PointsAff[2] //[δ]₁
 
 	offset := 3
 	pk.G1.A = g1PointsAff[offset : offset+len(A)]
@@ -267,11 +269,11 @@ func Setup(r1cs *cs.R1CS, pk *ProvingKey, vk *VerifyingKey) error {
 	pk.G1.Z = g1PointsAff[offset : offset+sizeZ]
 
 	offset += int(domain.Cardinality)
-
-	vk.G1.K = g1PointsAff[offset : offset+nbPublicWires]
+	vk.G1.K = g1PointsAff[offset : offset+nbPublicWires] //vk.G1.K是 publicWires的承诺
+	fmt.Printf("Setup Fill vk.G1.K, offset: %v, nbPublicWires:%v, G1.K:%v\n", offset, nbPublicWires, vk.G1.K)
 	offset += nbPublicWires
 
-	pk.G1.K = g1PointsAff[offset : offset+nbPrivateWires]
+	pk.G1.K = g1PointsAff[offset : offset+nbPrivateWires] //pk.G1.K是privateWires的承诺
 	offset += nbPrivateWires
 
 	// ---------------------------------------------------------------------------------------------

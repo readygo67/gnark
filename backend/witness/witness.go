@@ -143,7 +143,7 @@ func (w *witness) Fill(nbPublic, nbSecret int, values <-chan any) error {
 		}
 		i++
 	}
-
+	fmt.Printf("NewWitness Fill nbPublic:%d, nbSecret:%d, n:%v, Filled:%v\n", w.nbPublic, w.nbSecret, n, i)
 	//通道关闭后，检查收到的值和预期的值是否一致
 	if i != n {
 		return fmt.Errorf("expected %d values, filled only %d", n, i)

@@ -71,8 +71,8 @@ func newSolver(cs *system, witness fr.Vector, opts ...csolver.Option) (*solver, 
 
 	nbWires := len(cs.Public) + len(cs.Secret) + cs.NbInternalVariables
 	expectedWitnessSize := len(cs.Public) - witnessOffset + len(cs.Secret)
-	fmt.Printf("len(witness):%v, v:%v\n", len(witness), witness)
-	fmt.Printf("expectedWitnessSize:%v\n", expectedWitnessSize)
+
+	fmt.Printf("expectedWitnessSize:%v, len(witness):%v, v:%v\n", expectedWitnessSize, len(witness), witness)
 	if len(witness) != expectedWitnessSize {
 		return nil, fmt.Errorf("invalid witness size, got %d, expected %d", len(witness), expectedWitnessSize)
 	}

@@ -20,7 +20,7 @@ type InnerCubicCircuit struct {
 	Y frontend.Variable `gnark:",public"`
 }
 
-// x**3 + 2*x + 5 == y
+// x**3 + x + 5 == z
 func (c *InnerCubicCircuit) Define(api frontend.API) error {
 	xCubic := api.Mul(c.X, c.X, c.X)
 	api.AssertIsEqual(c.Y, api.Add(xCubic, c.X, 5))
@@ -57,7 +57,7 @@ func TestInnerCubicCircuit(t *testing.T) {
 		X: 3,
 		Y: 35,
 	}
-	//分析赋值电路实际的witness, witness是用fr.Element表示的电路实际输入，这里为3和5
+	//分析赋值电路实际的witness, witness是用fr.Element表示的电路实际输入，这里为3和5, fullwitness
 	witness, err := frontend.NewWitness(&c, ecc.BN254.ScalarField())
 	nbSecret := witness.NbSecret()
 	nbPublic := witness.NbPublic()
@@ -87,7 +87,7 @@ func TestInnerCubicCircuit(t *testing.T) {
 	fmt.Printf("numConstraints:%v, numWitness:%v, numInstance:%v\n", numConstraints, numWitness, numInstance)
 }
 
-func getInnerCubicCircuit(field *big.Int, x, y frontend.Variable) (constraint.ConstraintSystem, groth16.VerifyingKey, witness.Witness, groth16.Proof, error) {
+func getInnerCubicCircuit(field *big.Int, x frontend.Variable, y frontend.Variable) (constraint.ConstraintSystem, groth16.VerifyingKey, witness.Witness, groth16.Proof, error) {
 	innerCcs, err := frontend.Compile(field, r1cs.NewBuilder, &InnerCubicCircuit{})
 	if err != nil {
 		return nil, nil, nil, nil, err
@@ -140,6 +140,7 @@ func TestRecursiveCubicCircuit(t *testing.T) {
 	innerCcs, innerVK, innerPubWitness, innerProof, err := getInnerCubicCircuit(ecc.BN254.ScalarField(), 3, 35)
 	assert.NoError(err)
 
+	fmt.Printf("@@@@@@ after setup inner circuit\n")
 	// initialize the witness elements
 	circuitVk, err := stdgroth16.ValueOfVerifyingKey[sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl](innerVK)
 	assert.NoError(err)
