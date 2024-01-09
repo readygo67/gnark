@@ -9,8 +9,10 @@ import (
 	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
+	"github.com/consensys/gnark/std/algebra"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
 	"github.com/consensys/gnark/std/hash/sha2"
+	"github.com/consensys/gnark/std/math/emulated"
 	"github.com/consensys/gnark/std/math/uints"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
 	"github.com/consensys/gnark/test"
@@ -41,6 +43,28 @@ func (c *InnerHashCircuit) Define(api frontend.API) error {
 		uapi.ByteAssertEq(res[i], c.Output[i])
 	}
 	return nil
+}
+
+// OuterCircuit is the generic outer circuit which can verify Groth16 proofs
+// using field emulation or 2-chains of curves.
+type OuterCircuit[FR emulated.FieldParams, G1El algebra.G1ElementT, G2El algebra.G2ElementT, GtEl algebra.GtElementT] struct {
+	Proof        stdgroth16.Proof[G1El, G2El]
+	VerifyingKey stdgroth16.VerifyingKey[G1El, G2El, GtEl]
+	InnerWitness stdgroth16.Witness[FR]
+}
+
+func (c *OuterCircuit[FR, G1El, G2El, GtEl]) Define(api frontend.API) error {
+	curve, err := algebra.GetCurve[FR, G1El](api)
+	if err != nil {
+		return fmt.Errorf("new curve: %w", err)
+	}
+	pairing, err := algebra.GetPairing[G1El, G2El, GtEl](api)
+	if err != nil {
+		return fmt.Errorf("get pairing: %w", err)
+	}
+	verifier := stdgroth16.NewVerifier(curve, pairing)
+	err = verifier.AssertProof(c.VerifyingKey, c.Proof, c.InnerWitness)
+	return err
 }
 
 func getInnerCircuit(field *big.Int, input []uints.U8, output [32]uints.U8) (constraint.ConstraintSystem, groth16.VerifyingKey, witness.Witness, groth16.Proof, error) {
@@ -121,18 +145,11 @@ func TestRecursiveHashCircuit(t *testing.T) {
 		InnerWitness: stdgroth16.PlaceholderWitness[sw_bn254.ScalarField](innerCcs),
 		VerifyingKey: stdgroth16.PlaceholderVerifyingKey[sw_bn254.G1Affine, sw_bn254.G2Affine, sw_bn254.GTEl](innerCcs),
 	}
-	fmt.Printf("outerCircuit, nbPublic:%v\n", len(outerCircuit.InnerWitness.Public))
 
 	// compile the outer circuit
 	outerCcs, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, outerCircuit)
-	fmt.Printf("outerCcs, nbPublic(including \"1\"):%v, nbSecret:%v, nbInternal:%v\n", outerCcs.GetNbPublicVariables(), outerCcs.GetNbSecretVariables(), outerCcs.GetNbInternalVariables())
-
 	// create prover witness from the assignment
 	outerWitness, err := frontend.NewWitness(outerAssignment, ecc.BN254.ScalarField())
-	fmt.Printf("outerWitness, nbPublic:%v, nbSecret:%v\n", outerWitness.NbPublic(), outerWitness.NbSecret())
-	fmt.Printf("outerWitness:%v\n", outerWitness.Vector())
-	//assert.EqualValues(outerCcs.GetNbPublicVariables()-1, outerWitness.NbPublic())
-	//assert.EqualValues(outerCcs.GetNbSecretVariables(), outerWitness.NbSecret())
 
 	assert.NoError(err)
 	// create public witness from the assignment
@@ -143,13 +160,6 @@ func TestRecursiveHashCircuit(t *testing.T) {
 	outerPk, outerVk, err := groth16.Setup(outerCcs) // UNSAFE! Use MPC
 	assert.NoError(err)
 
-	/*
-	  recursive_hash_test.go:306:
-	        	Error Trace:	/Users/luokeep/Code/github.com/readygo67/gnark/std/recursion/groth16/recursive_hash_test.go:306
-	        	Error:      	Received unexpected error:
-	        	            	invalid witness size, got 512, expected 504
-	        	Test:       	TestRecursiveHashCircuit
-	*/
 	// construct the groth16 proof of verifying Groth16 proof in-circuit
 	outerProof, err := groth16.Prove(outerCcs, outerPk, outerWitness)
 	assert.NoError(err)

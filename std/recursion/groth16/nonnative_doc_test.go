@@ -12,9 +12,7 @@ import (
 	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
-	"github.com/consensys/gnark/std/algebra"
 	"github.com/consensys/gnark/std/algebra/emulated/sw_bn254"
-	"github.com/consensys/gnark/std/math/emulated"
 	stdgroth16 "github.com/consensys/gnark/std/recursion/groth16"
 )
 
@@ -73,28 +71,6 @@ func computeInnerProof(field *big.Int) (constraint.ConstraintSystem, groth16.Ver
 		panic(err)
 	}
 	return innerCcs, innerVK, innerPubWitness, innerProof
-}
-
-// OuterCircuit is the generic outer circuit which can verify Groth16 proofs
-// using field emulation or 2-chains of curves.
-type OuterCircuit[FR emulated.FieldParams, G1El algebra.G1ElementT, G2El algebra.G2ElementT, GtEl algebra.GtElementT] struct {
-	Proof        stdgroth16.Proof[G1El, G2El]
-	VerifyingKey stdgroth16.VerifyingKey[G1El, G2El, GtEl]
-	InnerWitness stdgroth16.Witness[FR]
-}
-
-func (c *OuterCircuit[FR, G1El, G2El, GtEl]) Define(api frontend.API) error {
-	curve, err := algebra.GetCurve[FR, G1El](api)
-	if err != nil {
-		return fmt.Errorf("new curve: %w", err)
-	}
-	pairing, err := algebra.GetPairing[G1El, G2El, GtEl](api)
-	if err != nil {
-		return fmt.Errorf("get pairing: %w", err)
-	}
-	verifier := stdgroth16.NewVerifier(curve, pairing)
-	err = verifier.AssertProof(c.VerifyingKey, c.Proof, c.InnerWitness)
-	return err
 }
 
 // Example of verifying recursively BN254 Groth16 proof in BN254 Groth16 circuit using field emulation
