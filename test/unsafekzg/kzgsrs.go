@@ -109,7 +109,73 @@ func NewSRS(ccs constraint.ConstraintSystem, opts ...Option) (canonical kzg.SRS,
 	log.Debug().Msg("SRS not found in cache, generating")
 
 	// not in cache, generate
-	canonical, lagrange, err = newSRS(curveID, sizeCanonical)
+	canonical, lagrange, err = newSRS(curveID, sizeCanonical, cfg.tau)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// cache it
+	memLock.Lock()
+	cache[key] = cacheEntry{canonical, lagrange}
+	memLock.Unlock()
+
+	if cfg.fsCache {
+		log.Debug().Str("key", key).Str("cacheDir", cfg.cacheDir).Msg("writing SRS to fs cache")
+		fsLock.Lock()
+		fsWrite(key, cfg.cacheDir, canonical, lagrange)
+		fsLock.Unlock()
+	}
+
+	return canonical, lagrange, nil
+}
+
+func NewSRSWithSize(sizeSystem int, field *big.Int, opts ...Option) (canonical kzg.SRS, lagrange kzg.SRS, err error) {
+
+	sizeLagrange := ecc.NextPowerOfTwo(uint64(sizeSystem))
+	fmt.Printf("sizeLagrange: %d\n", sizeLagrange)
+	sizeCanonical := sizeLagrange + 3
+
+	curveID := utils.FieldToCurve(field)
+
+	log := logger.Logger().With().Str("package", "kzgsrs").Int("size", int(sizeCanonical)).Str("curve", curveID.String()).Logger()
+
+	cfg, err := options(opts...)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	key := cacheKey(curveID, sizeCanonical)
+	log.Debug().Str("key", key).Msg("fetching SRS from mem cache")
+	memLock.RLock()
+	entry, ok := cache[key]
+	memLock.RUnlock()
+	if ok {
+		log.Debug().Msg("SRS found in mem cache")
+		return entry.canonical, entry.lagrange, nil
+	}
+	log.Debug().Msg("SRS not found in mem cache")
+
+	if cfg.fsCache {
+		log.Debug().Str("key", key).Str("cacheDir", cfg.cacheDir).Msg("fetching SRS from fs cache")
+		fsLock.RLock()
+		entry, err = fsRead(key, cfg.cacheDir)
+		fsLock.RUnlock()
+		if err == nil {
+			log.Debug().Str("key", key).Msg("SRS found in fs cache")
+			canonical, lagrange = entry.canonical, entry.lagrange
+			memLock.Lock()
+			cache[key] = cacheEntry{canonical, lagrange}
+			memLock.Unlock()
+			return
+		} else {
+			log.Debug().Str("key", key).Err(err).Msg("SRS not found in fs cache")
+		}
+	}
+
+	log.Debug().Msg("SRS not found in cache, generating")
+
+	// not in cache, generate
+	canonical, lagrange, err = newSRS(curveID, sizeCanonical, cfg.tau)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -147,11 +213,14 @@ func extractCurveID(key string) (ecc.ID, error) {
 	return ecc.IDFromString(matches[1])
 }
 
-func newSRS(curveID ecc.ID, size uint64) (kzg.SRS, kzg.SRS, error) {
+func newSRS(curveID ecc.ID, size uint64, tau *big.Int) (kzg.SRS, kzg.SRS, error) {
 
-	tau, err := rand.Int(rand.Reader, curveID.ScalarField())
-	if err != nil {
-		return nil, nil, err
+	var err error
+	if tau == nil {
+		tau, err = rand.Int(rand.Reader, curveID.ScalarField())
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	var srs kzg.SRS

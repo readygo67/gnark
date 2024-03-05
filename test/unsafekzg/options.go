@@ -1,6 +1,7 @@
 package unsafekzg
 
 import (
+	"math/big"
 	"os"
 	"path/filepath"
 
@@ -18,9 +19,17 @@ func WithFSCache() Option {
 	}
 }
 
+func WithTau(tau *big.Int) Option {
+	return func(opt *config) error {
+		opt.tau = tau
+		return nil
+	}
+}
+
 type config struct {
 	fsCache  bool
 	cacheDir string
+	tau      *big.Int
 }
 
 // default options
