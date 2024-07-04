@@ -28,7 +28,7 @@ import (
 const (
 	nbAccounts       = 16 // 16 accounts so we know that the proof length is 5
 	depth            = 5  // size fo the inclusion proofs
-	BatchSizeCircuit = 1  // nbTranfers to batch in a proof
+	BatchSizeCircuit = 10 // nbTranfers to batch in a proof
 )
 
 // Circuit "toy" rollup circuit where an operator can generate a proof that he processed
@@ -51,21 +51,22 @@ type Circuit struct {
 	Transfers [BatchSizeCircuit]TransferConstraints
 
 	// list of proofs corresponding to sender and receiver accounts
-	MerkleProofReceiverBefore [BatchSizeCircuit]merkle.MerkleProof
+	MerkleProofReceiverBefore [BatchSizeCircuit]merkle.MerkleProof //转账前的
 	MerkleProofReceiverAfter  [BatchSizeCircuit]merkle.MerkleProof
 	MerkleProofSenderBefore   [BatchSizeCircuit]merkle.MerkleProof
 	MerkleProofSenderAfter    [BatchSizeCircuit]merkle.MerkleProof
-	LeafReceiver              [BatchSizeCircuit]frontend.Variable
-	LeafSender                [BatchSizeCircuit]frontend.Variable
+	LeafReceiver              [BatchSizeCircuit]frontend.Variable //记录receiver的position
+	LeafSender                [BatchSizeCircuit]frontend.Variable //记录sender的position
 
 	// ---------------------------------------------------------------------------------------------
 	// PUBLIC INPUTS
 
 	// list of root hashes
-	RootHashesBefore [BatchSizeCircuit]frontend.Variable `gnark:",public"`
-	RootHashesAfter  [BatchSizeCircuit]frontend.Variable `gnark:",public"`
+	RootHashesBefore [BatchSizeCircuit]frontend.Variable `gnark:",public"` //转账前的Roothash
+	RootHashesAfter  [BatchSizeCircuit]frontend.Variable `gnark:",public"` //转账后的Roothash
 }
 
+// Account 的约束形式
 // AccountConstraints accounts encoded as constraints
 type AccountConstraints struct {
 	Index   frontend.Variable // index in the tree
@@ -74,6 +75,7 @@ type AccountConstraints struct {
 	PubKey  eddsa.PublicKey `gnark:"-"`
 }
 
+// Transfer 的约束形式？
 // TransferConstraints transfer encoded as constraints
 type TransferConstraints struct {
 	Amount         frontend.Variable
@@ -195,18 +197,22 @@ func verifyTransferSignature(api frontend.API, t TransferConstraints, hFunc mimc
 	return nil
 }
 
+// 1. verifyAccountUpdated 检查from 账户的nonce 只是增加了1
+// 2. 转账的amount必须小于from的balance
+// 3. to的balance必须增加amount
+// 4. from的balance必须减少amount
 func verifyAccountUpdated(api frontend.API, from, to, fromUpdated, toUpdated AccountConstraints, amount frontend.Variable) {
 
 	// ensure that nonce is correctly updated
-	nonceUpdated := api.Add(from.Nonce, 1)
+	nonceUpdated := api.Add(from.Nonce, 1) //from的nonce加1
 	api.AssertIsEqual(nonceUpdated, fromUpdated.Nonce)
 	api.AssertIsEqual(to.Nonce, toUpdated.Nonce)
 
 	// ensures that the amount is less than the balance
-	api.AssertIsLessOrEqual(amount, from.Balance)
+	api.AssertIsLessOrEqual(amount, from.Balance) //确保amount小于from的balance
 
 	// ensure that balance is correctly updated
-	fromBalanceUpdated := api.Sub(from.Balance, amount)
+	fromBalanceUpdated := api.Sub(from.Balance, amount) //
 	api.AssertIsEqual(fromBalanceUpdated, fromUpdated.Balance)
 
 	toBalanceUpdated := api.Add(to.Balance, amount)

@@ -30,7 +30,7 @@ import (
 
 func TestOperatorReadAccount(t *testing.T) {
 
-	// create operator with 10 accounts
+	// create operator with 10 accounts，create 10 accounts and return their privatekey
 	operator, _ := createOperator(10)
 
 	// check if the account read from the operator is correct
@@ -47,6 +47,7 @@ func TestOperatorReadAccount(t *testing.T) {
 
 }
 
+// TestSignTransfer 验证签名
 func TestSignTransfer(t *testing.T) {
 
 	var amount uint64
@@ -136,13 +137,14 @@ func TestOperatorUpdateAccount(t *testing.T) {
 	sender.balance.Sub(&sender.balance, &frAmount)
 	receiver.balance.Add(&receiver.balance, &frAmount)
 
-	compareAccount(t, newSender, sender)
+	compareAccount(t, newSender, sender) //比较SenderAfter
 	compareHashAccount(t, operator.HashState[0:operator.h.Size()], newSender, operator.h)
 
-	compareAccount(t, newReceiver, receiver)
+	compareAccount(t, newReceiver, receiver) //比较ReceiverAfter
 	compareHashAccount(t, operator.HashState[operator.h.Size():2*operator.h.Size()], newReceiver, operator.h)
 }
 
+// 创建account，每个account的index =i, nonce =, balance = 20+i
 func createAccount(i int) (Account, eddsa.PrivateKey) {
 
 	var acc Account
@@ -152,7 +154,7 @@ func createAccount(i int) (Account, eddsa.PrivateKey) {
 	// create account, the i-th account has a balance of 20+i
 	acc.index = uint64(i)
 	acc.nonce = uint64(i)
-	acc.balance.SetUint64(uint64(i) + 20)
+	acc.balance.SetUint64(uint64(i) + 100)
 	rnd.SetUint64(uint64(i))
 	src := rand.NewSource(int64(i))
 	r := rand.New(src)

@@ -43,6 +43,73 @@ var (
 	errInvalidWitness       = errors.New("witness length is invalid")
 )
 
+func printProof(proof *Proof) {
+	fmt.Printf("proof.[a(x)]:%+v\n", proof.LRO[0])
+	fmt.Printf("proof.[b(x)]:%+v\n", proof.LRO[1])
+	fmt.Printf("proof.[c(x)]:%+v\n", proof.LRO[2])
+	fmt.Printf("proof.[z(x)]:%+v\n", proof.Z)
+	fmt.Printf("proof.[h0(x)]:%+v\n", proof.H[0])
+	fmt.Printf("proof.[h1(x)]:%+v\n", proof.H[1])
+	fmt.Printf("proof.[h2(x)]:%+v\n", proof.H[2])
+
+	fmt.Printf("bsb22 commitments:%+v\n", proof.Bsb22Commitments)
+
+	fmt.Printf("proof.batchedProof.H:%+v", proof.BatchedProof.H)
+	fmt.Printf("proof.batchedProof.ClaimedValues:%+v", proof.BatchedProof.ClaimedValues)
+
+	fmt.Printf("proof.ZShiftedOpening.H:%+v", proof.ZShiftedOpening.H)
+	fmt.Printf("proof.ZShiftedOpening.ClaimedValue:%+v", proof.ZShiftedOpening.ClaimedValue)
+}
+
+func printVk(vk *VerifyingKey) {
+	fmt.Printf("vk.size:%+v, vk.SizeInv:%+v\n", vk.Size, vk.SizeInv)
+	fmt.Printf("vk.generator:%+v\n", vk.Generator)
+	fmt.Printf("vk.Kzg.G2:%+v\n", vk.Kzg.G2[0])
+	fmt.Printf("vk.Kzg.αG2:%+v\n", vk.Kzg.G2[1])
+	fmt.Printf("vk.Kzg.G1:%+v\n", vk.Kzg.G1)
+	fmt.Printf("NbPublicVariables:%+v\n", vk.NbPublicVariables)
+	fmt.Printf("coset:%+v\n", vk.CosetShift)
+	fmt.Printf("vk.S[0]:%+v\n", vk.S[0])
+	fmt.Printf("vk.S[1]:%+v\n", vk.S[1])
+	fmt.Printf("vk.S[2]:%+v\n", vk.S[2])
+	fmt.Printf("vk.Ql:%+v\n", vk.Ql)
+	fmt.Printf("vk.Qr:%+v\n", vk.Qr)
+	fmt.Printf("vk.Qm:%+v\n", vk.Qm)
+	fmt.Printf("vk.Qo:%+v\n", vk.Qo)
+	fmt.Printf("vk.Qk:%+v\n", vk.Qk)
+	fmt.Printf("vk.Qcp:%+v\n", vk.Qcp)
+	fmt.Printf("vk.CommitmentConstraintIndexes:%+v\n", vk.CommitmentConstraintIndexes)
+}
+
+/*
+nbConstraints: 4
+vk.size:8, vk.SizeInv:[0 0 0 2305843009213693952]
+vk.generator:[17919060829948181567 3269832130201093566 15669990316177631735 2612225116521290153]
+vk.Kzg.G2:{X:{A0:[10269251484633538598 15918845024527909234 18138289588161026783 1825990028691918907] A1:[12660871435976991040 6936631231174072516 714191060563144582 1512910971262892907]} Y:{A0:[7034053747528165878 18338607757778656120 18419188534790028798 2953656481336934918] A1:[7208393106848765678 15877432936589245627 6195041853444001910 983087530859390082]}}
+vk.Kzg.αG2:{X:{A0:[8650504425757902524 16403655048515839069 6738075930381345404 162576330247084177] A1:[1783407446529906203 16388134564287287564 10691329897643206798 1417438596460495847]} Y:{A0:[18420908591769930154 38417099133583275 4619146372238416683 3356073820233321356] A1:[17694947990916007242 3502473321109216397 9653266774138959742 1235775345713159650]}}
+vk.Kzg.G1:{X:[15230403791020821917 754611498739239741 7381016538464732716 1011752739694698287] Y:[12014063508332092218 1509222997478479483 14762033076929465432 2023505479389396574]}
+NbPublicVariables:1
+coset:[1949230679015292902 16913946402569752895 5177146667339417225 1571765431670520771]
+vk.S[0]:{X:[5864949977874134318 4288480781228971873 4781322775420163064 1934683590021470023] Y:[10892376807775355173 11229506062781819583 10065737095109526364 817252705490139566]}
+vk.S[1]:{X:[232241367666287045 11059521844025436143 15744080137522103860 1423256757209913810] Y:[14339377883132494852 14920341456335562871 14166265986056168007 2080196835537174822]}
+vk.S[2]:{X:[13083487752259185165 13895816465060455799 12825737268764612505 1035030644364036321] Y:[2707548216988818370 6422475142814584015 18254458305752387239 3424061257485093121]}
+vk.Ql:{X:[5810172476552562989 17190898308143135942 3982782797974793283 2657003297835466297] Y:[1661106341780186897 4958899653906615794 2570182635101424465 2192409681384944721]}
+vk.Qr:{X:[10250245811823294244 15012447893747468049 3914808559831519777 3038396681933657166] Y:[8582606314298403104 2439699783796341760 12405118354124625277 846619200037842847]}
+vk.Qm:{X:[16334734985952802345 18231201106719581587 10708155312274943162 261230968313438426] Y:[2630547281493424563 15705967213996910957 15151352068960755504 1318589335330970680]}
+vk.Qo:{X:[13402027168496181236 10336520590381911603 17060590902510138350 1437306266602796869] Y:[734471636246559338 13449425476257102058 11767885526321132369 1452845866555461929]}
+vk.Qk:{X:[6798988879527435627 12630094298203004318 17943359638619237143 1802317090415584539] Y:[6110603808289984935 7734325136369843402 10967598794113970798 1771946720160622251]}
+vk.Qcp:[]
+vk.CommitmentConstraintIndexes:[]
+proof.[a(x)]:{X:[16450544645177916784 13268464200884867102 4469391714368707858 3062879022225578682] Y:[11164731840670250453 3595285410721468745 4186112301988943015 1607717546866822133]}
+proof.[b(x)]:{X:[7653811811329507964 4339509727622321018 11075547746841179004 2008865237893526104] Y:[2608076357267318782 13137069933350007182 1950747947715980870 3187120742702254201]}
+proof.[c(x)]:{X:[8243961167569342907 7354442951827721191 16045092680087901364 1736410658757134701] Y:[4110255170165469163 9722439057701908901 2898875722552793444 1142999103926654634]}
+proof.[z(x)]:{X:[16000914299357431852 7424774731140667323 11807919030727746739 3195687347351288610] Y:[6978875518885685278 8012396315266260542 4524848139655694140 3180930533327658965]}
+proof.[h0(x)]:{X:[5441387713989499092 2926620727832790471 12371478020080738555 928429519215108379] Y:[9779919444792947271 16615959396245328498 14385024506947551726 1642392241656626640]}
+proof.[h1(x)]:{X:[17231951154565620213 4330466870880158551 4065474417613847252 2658691123784177786] Y:[18250568472921985468 15606245107597850144 2106777738725116538 1053242103048393171]}
+proof.[h2(x)]:{X:[14829397963587892918 17012722957432711659 15938292695207005782 3056767801212596409] Y:[293726161492374053 4225879049635666442 5586177179081220722 2326678156443787797]}
+bsb22 commitments:[]
+proof.batchedProof.H:{X:[10626878420555546557 18163264620050062573 6240409053440860081 1807953880277101427] Y:[7716964001121691 16542380810182701206 891405853987462206 378099013780083936]}proof.batchedProof.ClaimedValues:[[7358542147112488106 6375778120277107144 858120466203420046 504045238008673436] [16764378348255174042 10932077451976621449 6115074577364100348 2146327637620403196] [17397251374303516144 14551786536500054276 17063580003830967082 120686125733012849] [11686895849886033674 9766959261430497965 4211796799230876556 3108196134635496984] [18407369925999413465 11868738211537524997 8452565045028517509 1422145053817646454] [7075584382120284389 103997084930984811 16165845793906298603 734922751732154657] [13136667517100603531 8430781437063821669 7418642498916374265 358778879396228483]]proof.ZShiftedOpening.H:{X:[6120963779404238978 17369713205798386051 12410958043380834821 231047540192024434] Y:[4325228696366848625 10287794812560707497 14024802976010458293 2822246451302210316]}proof.ZShiftedOpening.ClaimedValue:[58460402408319295 265382222825164196 16121974218260368173 2168904970847788486]proof: 141d70e66d7a766b93b71bba758d8260fd2ca02c2207c88010112222caf5c30b10808177b968c528a35499b2d330637491cceaeadf606034ba5ebf7f9679d03320a04ca8896f6a3d355a55090ca6e2472c6a84b502298141f999cbcf24e7142e15969a001815af0cd1873b52b4ead1655a98e7b9c68fb548208f137db9d95d450bcef2ccc135b85f2200db93ef08d7372faf230e96ecccbe36fc0e9a8b5d83f22ae5a88f4e96aab8866d1b4990de7059a993a641964c0ed1a765656f4a2ceeee19286aff93f6647e4102fadac7148a54b63d5398bb60db9b388bbf1844287f6401dd129e11e9ce9b61b16e8b0aa8f03af836d4348503da4d063e45c03402d07716a12e92f30e50bc7a02f286102710ddb8bcb8a3ec0e543428549508dea9101008a4fc1aa1e83746db323f2d5e8badc327ba75b59d8f9a3b7c3d1c3b33523d961f41be0271ac153aaeaacb514ed35ba9cce8b7ed7043f052214a8136efc34c7f1b5a99ba8204789413da4a842043c133973952eb84708e27f41a99d44829c85322f758d1fa97c9d96194feb3fafa1dc00d410ed56f05665c56691fedb00d8c331353794334c52a4692ffa50ae8feda9e2b2fd96c21a0ea74a1b7e04bc7ec82db2ac5af37467a8dc02fe90b7760300fa973e61b84121b9f6d0c64e018a672512a073a4d84d5a4824f241e794efbdf7acc0f7986cf2445ad044e197f1640d2e6782267086b21138a47b22a8478473e189ed04b9c1191f162e1c1e9f06980a572c80f7b277cce97113dc4b335ee3190d594b7d7c39c4a1e70576e30547e6a6bce4a131bf631dd3229ec3feb013022e8b8d84aa7f7afba7c75b1983ee4d173362b8612aaff80388cbde1f2d73f21f40517b6932cee5cad645a42e2b4b801ade00db30ad0f5589d7e26ce1e5de524d8745feb7ed7244f225060ab870a3d111a6b0b671be045c958aa178473594fcb510202f86658e9c53e670c48305992bfcf503eaf2a61ac0b4b574d3482965122ca3dd2ac378e4ab7238bdd6fde988625cdac16f32deca00f059e23303787397d76b22a724c1cbe766159b39e46b82d5dbcc9ef770db19346f011528825ac611d6ae43c94e5590b8319f4dfe316327eaecd99cacf0085ec74ba1d55b18c5db955b92ca65aadc92716a15d3ca010c9b6d6de2bc001
+*/
 func Verify(proof *Proof, vk *VerifyingKey, publicWitness fr.Vector, opts ...backend.VerifierOption) error {
 	log := logger.Logger().With().Str("curve", "bn254").Str("backend", "plonk").Logger()
 	start := time.Now()
@@ -59,12 +126,16 @@ func Verify(proof *Proof, vk *VerifyingKey, publicWitness fr.Vector, opts ...bac
 		return errInvalidWitness
 	}
 
+	printVk(vk)
+	printProof(proof)
+
 	// transcript to derive the challenge
 	fs := fiatshamir.NewTranscript(cfg.ChallengeHash, "gamma", "beta", "alpha", "zeta")
 
 	// The first challenge is derived using the public data: the commitments to the permutation,
 	// the coefficients of the circuit, and the public inputs.
 	// derive gamma from the Comm(blinded cl), Comm(blinded cr), Comm(blinded co)
+	// 得到gamma， 为gamma 准备binding数据
 	if err := bindPublicData(fs, "gamma", vk, publicWitness); err != nil {
 		return err
 	}
@@ -74,12 +145,14 @@ func Verify(proof *Proof, vk *VerifyingKey, publicWitness fr.Vector, opts ...bac
 	}
 
 	// derive beta from Comm(l), Comm(r), Comm(o)
+	//得到peta
 	beta, err := deriveRandomness(fs, "beta")
 	if err != nil {
 		return err
 	}
 
 	// derive alpha from Comm(l), Comm(r), Comm(o), Com(Z), Bsb22Commitments
+	// alphaDeps 是alpha的dependence
 	alphaDeps := make([]*curve.G1Affine, len(proof.Bsb22Commitments)+1)
 	for i := range proof.Bsb22Commitments {
 		alphaDeps[i] = &proof.Bsb22Commitments[i]
@@ -96,36 +169,39 @@ func Verify(proof *Proof, vk *VerifyingKey, publicWitness fr.Vector, opts ...bac
 		return err
 	}
 
-	// evaluation of Z=Xⁿ⁻¹ at ζ
+	// evaluation of Z=Xⁿ-1 at ζ
+	// 计算 ζ^m 和 ζ^m - 1，其中 m 是电路的大小
 	var zetaPowerM, zzeta fr.Element
 	var bExpo big.Int
 	one := fr.One()
 	bExpo.SetUint64(vk.Size)
-	zetaPowerM.Exp(zeta, &bExpo)
-	zzeta.Sub(&zetaPowerM, &one)
+	zetaPowerM.Exp(zeta, &bExpo) //zetaPowerM = ζ^m
+	zzeta.Sub(&zetaPowerM, &one) // zzeta = ζ^m - 1
 
-	// compute PI = ∑_{i<n} Lᵢ*wᵢ
+	// compute PI = ∑_{i<n} Lᵢ*wᵢ //计算PI 的方程 和PI(zeta)的值？
 	// TODO use batch inversion
 	var pi, lagrangeOne fr.Element
 	{
 		var den, xiLi fr.Element
-		lagrange := zzeta // ζⁿ⁻¹
+		lagrange := zzeta // ζ^m - 1
 		wPowI := fr.One()
-		den.Sub(&zeta, &wPowI)
-		lagrange.Div(&lagrange, &den).Mul(&lagrange, &vk.SizeInv) // (1/n)(ζⁿ-1)/(ζ-1)
-		lagrangeOne.Set(&lagrange)                                // save it for later
+		den.Sub(&zeta, &wPowI)                                    // den= zeta -1
+		lagrange.Div(&lagrange, &den).Mul(&lagrange, &vk.SizeInv) //lagrange = (1/n)(ζⁿ-1)/(ζ-1)
+		lagrangeOne.Set(&lagrange)                                // lagrangeOne = (1/n)(ζⁿ-1)/(ζ-1)
 		for i := 0; i < len(publicWitness); i++ {
 
-			xiLi.Mul(&lagrange, &publicWitness[i])
-			pi.Add(&pi, &xiLi)
+			xiLi.Mul(&lagrange, &publicWitness[i]) // xiLi = L0*w0
+			pi.Add(&pi, &xiLi)                     // pi = L0*w0 +
 
-			// use Lᵢ₊₁ = w×Lᵢ(ζ-wⁱ)/(ζ-wⁱ⁺¹)
+			// use Lᵢ₊₁ = w * Lᵢ* (ζ-wⁱ)/(ζ-wⁱ⁺¹)
+			//每次循环都计算并累加每一项的值，同时更新拉格朗日基函数L_{i+1}(ζ)的值
 			if i+1 != len(publicWitness) {
-				lagrange.Mul(&lagrange, &vk.Generator).
-					Mul(&lagrange, &den)
-				wPowI.Mul(&wPowI, &vk.Generator)
-				den.Sub(&zeta, &wPowI)
-				lagrange.Div(&lagrange, &den)
+				lagrange.Mul(&lagrange, &vk.Generator). // 计算一部分，L_{i+1} = w * (ζ-1) * (1/n)(ζⁿ-1)/(ζ-1) = (w/n) * (ζⁿ-1)
+									Mul(&lagrange, &den)
+
+				wPowI.Mul(&wPowI, &vk.Generator) //将 wPowI 从 w^{i} 更新为 w^{i+1}
+				den.Sub(&zeta, &wPowI)           //den = ζ - w^{i+1}
+				lagrange.Div(&lagrange, &den)    //L_{i+1} = (w/n) * (ζⁿ-1)/ (ζ-w^{i+1})
 			}
 		}
 
@@ -137,16 +213,19 @@ func Verify(proof *Proof, vk *VerifyingKey, publicWitness fr.Vector, opts ...bac
 		if cfg.HashToFieldFn.Size() < fr.Bytes {
 			nbBuf = cfg.HashToFieldFn.Size()
 		}
+
+		//增加约束：这段代码对带有承诺的变量增加了约束。通过计算这些变量的拉格朗日基函数并将其哈希值相乘，再累加到多项式 Pi(ζ) 中，确保这些承诺变量在验证过程中被正确考虑。
+		//保证正确性：这些操作保证了在验证过程中，所有带有承诺的变量都按照特定的规则参与到多项式的计算中，从而保证了验证过程的正确性和完整性。
 		for i := range vk.CommitmentConstraintIndexes {
-			cfg.HashToFieldFn.Write(proof.Bsb22Commitments[i].Marshal())
-			hashBts := cfg.HashToFieldFn.Sum(nil)
-			cfg.HashToFieldFn.Reset()
-			hashedCmt.SetBytes(hashBts[:nbBuf])
+			cfg.HashToFieldFn.Write(proof.Bsb22Commitments[i].Marshal()) // 将 proof.Bsb22Commitments[i] 转换为字节数组并写入哈希函数
+			hashBts := cfg.HashToFieldFn.Sum(nil)                        //调用 cfg.HashToFieldFn.Sum(nil) 计算哈希值
+			cfg.HashToFieldFn.Reset()                                    //重置哈希函数，以便处理下一个承诺。
+			hashedCmt.SetBytes(hashBts[:nbBuf])                          //hashedCmt 是一个Fr.Element
 
 			// Computing L_{CommitmentIndex}
 
-			wPowI.Exp(vk.Generator, big.NewInt(int64(vk.NbPublicVariables)+int64(vk.CommitmentConstraintIndexes[i])))
-			den.Sub(&zeta, &wPowI) // ζ-wⁱ
+			wPowI.Exp(vk.Generator, big.NewInt(int64(vk.NbPublicVariables)+int64(vk.CommitmentConstraintIndexes[i]))) //wPowI = w^{int64(vk.NbPublicVariables)+int64(vk.CommitmentConstraintIndexes[i]))}
+			den.Sub(&zeta, &wPowI)                                                                                    // ζ-wⁱ
 
 			lagrange.SetOne().
 				Sub(&zeta, &lagrange).       // ζ-1
@@ -155,110 +234,123 @@ func Verify(proof *Proof, vk *VerifyingKey, publicWitness fr.Vector, opts ...bac
 				Mul(&lagrange, &lagrangeOne) // wⁱ/n (ζⁿ-1)/(ζ-wⁱ)
 
 			xiLi.Mul(&lagrange, &hashedCmt)
-			pi.Add(&pi, &xiLi)
+			pi.Add(&pi, &xiLi) //对于部分带承诺的Pi, 增加数值
 		}
 	}
 
 	// linearizedpolynomial + pi(ζ) + α*(Z(μζ))*(l(ζ)+β*s1(ζ)+γ)*(r(ζ)+β*s2(ζ)+γ)*(o(ζ)+γ) - α²*L₁(ζ)
 	var _s1, _s2, _o, alphaSquareLagrange fr.Element
 
-	zu := proof.ZShiftedOpening.ClaimedValue
+	zu := proof.ZShiftedOpening.ClaimedValue //z(w*zeta)的值
 
+	// foldH在zeta点处的打开值 = h0(x) + ζ^m+2 * h1(x) + ζ^2(m+2) * h2(x) 在zeta点处的打开值
 	claimedQuotient := proof.BatchedProof.ClaimedValues[0]
+	// 线性化多项式// linearizedPolynomial =   [ l(ζ)*Ql(X) + l(ζ)r(ζ)*Qm(X) + r(ζ)*Qr(X) +O(ζ)*Qo(X) + Qc(x) +Qcp(x)]
+	//   + α*[ (l(ζ)+β*s1(ζ)+γ)*(r(ζ)+β*s2(ζ)+γ)*Z(μζ)*s3(X) - Z(X)*(l(ζ)+β*ζ+γ)*(r(ζ)+β*u*ζ+γ)*(o(ζ)+β*u²*ζ+γ))]
+	//   + z(x) * α²*L₁(ζ) 在zeta点处的取值
 	linearizedPolynomialZeta := proof.BatchedProof.ClaimedValues[1]
-	l := proof.BatchedProof.ClaimedValues[2]
-	r := proof.BatchedProof.ClaimedValues[3]
-	o := proof.BatchedProof.ClaimedValues[4]
-	s1 := proof.BatchedProof.ClaimedValues[5]
-	s2 := proof.BatchedProof.ClaimedValues[6]
+	l := proof.BatchedProof.ClaimedValues[2]  //a(x)在zeta 打开值
+	r := proof.BatchedProof.ClaimedValues[3]  //b(x)在zeta 的打开值
+	o := proof.BatchedProof.ClaimedValues[4]  //c(x)在zeta 的打开值
+	s1 := proof.BatchedProof.ClaimedValues[5] //s1(x)在zeta 的打开值
+	s2 := proof.BatchedProof.ClaimedValues[6] //s2(x)在zeta的打开值
 
-	_s1.Mul(&s1, &beta).Add(&_s1, &l).Add(&_s1, &gamma) // (l(ζ)+β*s1(ζ)+γ)
-	_s2.Mul(&s2, &beta).Add(&_s2, &r).Add(&_s2, &gamma) // (r(ζ)+β*s2(ζ)+γ)
-	_o.Add(&o, &gamma)                                  // (o(ζ)+γ)
-
+	_s1.Mul(&s1, &beta).Add(&_s1, &l).Add(&_s1, &gamma) // _s1= (l(ζ)+β*s1(ζ)+γ) =(a(x)+β*s1(ζ)+γ))
+	_s2.Mul(&s2, &beta).Add(&_s2, &r).Add(&_s2, &gamma) // _s2 = (r(ζ)+β*s2(ζ)+γ) = (b(x)+β*s2(ζ)+γ))
+	_o.Add(&o, &gamma)                                  // (o(ζ)+γ) = (c(x)+γ))
+	//_s1 是不包含未打开的s3(x)部分的置换多项式的值
 	_s1.Mul(&_s1, &_s2).
 		Mul(&_s1, &_o).
 		Mul(&_s1, &alpha).
-		Mul(&_s1, &zu) //  α*(Z(μζ))*(l(ζ)+β*s1(ζ)+γ)*(r(ζ)+β*s2(ζ)+γ)*(o(ζ)+γ)
+		Mul(&_s1, &zu) //  _s1 = α*(Z(μζ))*(l(ζ)+β*s1(ζ)+γ)*(r(ζ)+β*s2(ζ)+γ)*(o(ζ)+γ)
 
 	alphaSquareLagrange.Mul(&lagrangeOne, &alpha).
-		Mul(&alphaSquareLagrange, &alpha) // α²*L₁(ζ)
+		Mul(&alphaSquareLagrange, &alpha) // alphaSquareLagrange = α²*L₁(ζ)
 
+	//FIXME：这个值加上pi,_s1, alphaSquareLagrange有什么用？
 	linearizedPolynomialZeta.
 		Add(&linearizedPolynomialZeta, &pi).                 // linearizedpolynomial + pi(zeta)
 		Add(&linearizedPolynomialZeta, &_s1).                // linearizedpolynomial+pi(zeta)+α*(Z(μζ))*(l(ζ)+s1(ζ)+γ)*(r(ζ)+s2(ζ)+γ)*(o(ζ)+γ)
 		Sub(&linearizedPolynomialZeta, &alphaSquareLagrange) // linearizedpolynomial+pi(zeta)+α*(Z(μζ))*(l(ζ)+s1(ζ)+γ)*(r(ζ)+s2(ζ)+γ)*(o(ζ)+γ)-α²*L₁(ζ)
 
 	// Compute H(ζ) using the previous result: H(ζ) = prev_result/(ζⁿ-1)
+	// linearizedPolynomialZeta 看起来是h(x)中没有打开部分的取值？？
 	var zetaPowerMMinusOne fr.Element
 	zetaPowerMMinusOne.Sub(&zetaPowerM, &one)
 	linearizedPolynomialZeta.Div(&linearizedPolynomialZeta, &zetaPowerMMinusOne)
 
 	// check that H(ζ) is as claimed
-	if !claimedQuotient.Equal(&linearizedPolynomialZeta) {
+	if !claimedQuotient.Equal(&linearizedPolynomialZeta) { //FIXME：检查商多项式的值是否相等
 		return errWrongClaimedQuotient
 	}
 
 	// compute the folded commitment to H: Comm(h₁) + ζᵐ⁺²*Comm(h₂) + ζ²⁽ᵐ⁺²⁾*Comm(h₃)
 	mPlusTwo := big.NewInt(int64(vk.Size) + 2)
 	var zetaMPlusTwo fr.Element
-	zetaMPlusTwo.Exp(zeta, mPlusTwo)
+	zetaMPlusTwo.Exp(zeta, mPlusTwo) //ζ^{m+2}
 	var zetaMPlusTwoBigInt big.Int
 	zetaMPlusTwo.BigInt(&zetaMPlusTwoBigInt)
 	foldedH := proof.H[2]
-	foldedH.ScalarMultiplication(&foldedH, &zetaMPlusTwoBigInt)
-	foldedH.Add(&foldedH, &proof.H[1])
-	foldedH.ScalarMultiplication(&foldedH, &zetaMPlusTwoBigInt)
-	foldedH.Add(&foldedH, &proof.H[0])
+	foldedH.ScalarMultiplication(&foldedH, &zetaMPlusTwoBigInt) // = ζ^{m+2} * Comm(h3)
+	foldedH.Add(&foldedH, &proof.H[1])                          // = [Comm(h₂) +  ζ^{m+2} *Comm(h₃)]
+	foldedH.ScalarMultiplication(&foldedH, &zetaMPlusTwoBigInt) //= ζ^{m+2}* [Comm(h₂) +  ζ^{m+2} *Comm(h₃)]
+	foldedH.Add(&foldedH, &proof.H[0])                          //foldedH = Comm(h₁) + ζᵐ⁺²*Comm(h₂) + ζ²⁽ᵐ⁺²⁾*Comm(h₃)
 
 	// Compute the commitment to the linearized polynomial
 	// linearizedPolynomialDigest =
-	// 		l(ζ)*ql+r(ζ)*qr+r(ζ)l(ζ)*qm+o(ζ)*qo+qk+Σᵢqc'ᵢ(ζ)*BsbCommitmentᵢ +
-	// 		α*( Z(μζ)(l(ζ)+β*s₁(ζ)+γ)*(r(ζ)+β*s₂(ζ)+γ)*s₃(X)-Z(X)(l(ζ)+β*id_1(ζ)+γ)*(r(ζ)+β*id_2(ζ)+γ)*(o(ζ)+β*id_3(ζ)+γ) ) +
-	// 		α²*L₁(ζ)*Z
+	// 		l(ζ)*Ql(x)+r(ζ)*Qr(x)+r(ζ)l(ζ)*Qm(x)+o(ζ)*Qo(x)+Qk(x)+Σᵢqc'ᵢ(ζ)*BsbCommitmentᵢ
+	// 		+ α*(Z(μζ)(l(ζ)+β*s₁(ζ)+γ)*(r(ζ)+β*s₂(ζ)+γ)*s₃(X)-Z(X)(l(ζ)+β*id_1(ζ)+γ)*(r(ζ)+β*id_2(ζ)+γ)*(o(ζ)+β*id_3(ζ)+γ) ) +
+	// 		+ α²*L₁(ζ)*Z(x)
+	//      = α*( Z(μζ)(l(ζ)+β*s₁(ζ)+γ)*(r(ζ)+β*s₂(ζ)+γ)*s₃(X) + Z(x)[α²*L₁(ζ)- α *(l(ζ)+β*id_1(ζ)+γ)*(r(ζ)+β*id_2(ζ)+γ)*(o(ζ)+β*id_3(ζ)+γ) ]
 	// first part: individual constraints
 	var rl fr.Element
-	rl.Mul(&l, &r)
+	rl.Mul(&l, &r) // rl = a(ζ)*b(ζ)= r(ζ)l(ζ)
 
 	var linearizedPolynomialDigest curve.G1Affine
 
 	// second part: α*( Z(μζ)(l(ζ)+β*s₁(ζ)+γ)*(r(ζ)+β*s₂(ζ)+γ)*β*s₃(X)-Z(X)(l(ζ)+β*id_1(ζ)+γ)*(r(ζ)+β*id_2(ζ)+γ)*(o(ζ)+β*id_3(ζ)+γ) ) )
-
+	// =     α*[Z(μζ)*β*s₃(X)* (l(ζ)+β*s₁(ζ)+γ) * (r(ζ)+β*s₂(ζ)+γ) - Z(X)* (l(ζ)+β*id_1(ζ)+γ)*(r(ζ)+β*id_2(ζ)+γ)*(o(ζ)+β*id_3(ζ)+γ)  ]
+	//第一部分符号:   u                 v                 w
+	//第二部分符号：                                                                     u                  v             w
+	//第一部分
 	var u, v, w, cosetsquare fr.Element
-	u.Mul(&zu, &beta)
-	v.Mul(&beta, &s1).Add(&v, &l).Add(&v, &gamma)
-	w.Mul(&beta, &s2).Add(&w, &r).Add(&w, &gamma)
-	_s1.Mul(&u, &v).Mul(&_s1, &w).Mul(&_s1, &alpha) // α*Z(μζ)(l(ζ)+β*s₁(ζ)+γ)*(r(ζ)+β*s₂(ζ)+γ)*β
+	u.Mul(&zu, &beta)                               //u = Z(μζ) * β
+	v.Mul(&beta, &s1).Add(&v, &l).Add(&v, &gamma)   // v = (l(ζ)+β*s₁(ζ)+γ)
+	w.Mul(&beta, &s2).Add(&w, &r).Add(&w, &gamma)   // w = (r(ζ)+β*s₂(ζ)+γ)
+	_s1.Mul(&u, &v).Mul(&_s1, &w).Mul(&_s1, &alpha) // _s1 = α*Z(μζ)(l(ζ)+β*s₁(ζ)+γ)*(r(ζ)+β*s₂(ζ)+γ)*β
 
-	cosetsquare.Square(&vk.CosetShift)
-	u.Mul(&beta, &zeta).Add(&u, &l).Add(&u, &gamma)                         // (l(ζ)+β*ζ+γ)
-	v.Mul(&beta, &zeta).Mul(&v, &vk.CosetShift).Add(&v, &r).Add(&v, &gamma) // (r(ζ)+β*μ*ζ+γ)
-	w.Mul(&beta, &zeta).Mul(&w, &cosetsquare).Add(&w, &o).Add(&w, &gamma)   // (o(ζ)+β*μ²*ζ+γ)
-	_s2.Mul(&u, &v).Mul(&_s2, &w).Neg(&_s2)                                 // -(l(ζ)+β*ζ+γ)*(r(ζ)+β*u*ζ+γ)*(o(ζ)+β*u²*ζ+γ)
+	// 第二部分
+	cosetsquare.Square(&vk.CosetShift)                                      //陪集的平方
+	u.Mul(&beta, &zeta).Add(&u, &l).Add(&u, &gamma)                         // u = (l(ζ)+β*ζ+γ)
+	v.Mul(&beta, &zeta).Mul(&v, &vk.CosetShift).Add(&v, &r).Add(&v, &gamma) // v = (r(ζ)+β*k*ζ+γ)
+	w.Mul(&beta, &zeta).Mul(&w, &cosetsquare).Add(&w, &o).Add(&w, &gamma)   // w = (o(ζ)+β*k^2 *ζ+γ)
+	_s2.Mul(&u, &v).Mul(&_s2, &w).Neg(&_s2)                                 // -(l(ζ)+β*ζ+γ)*(r(ζ)+β*k*ζ+γ)*(o(ζ)+β*k²*ζ+γ)
 
-	// note since third part =  α²*L₁(ζ)*Z
-	_s2.Mul(&_s2, &alpha).Add(&_s2, &alphaSquareLagrange) // -α*(l(ζ)+β*ζ+γ)*(r(ζ)+β*u*ζ+γ)*(o(ζ)+β*u²*ζ+γ) + α²*L₁(ζ)
+	// note since third part =  α²*L₁(ζ)*Z，s2是Z(x)的系数
+	_s2.Mul(&_s2, &alpha).Add(&_s2, &alphaSquareLagrange) // _s2 = -α*(l(ζ)+β*ζ+γ)*(r(ζ)+β*u*ζ+γ)*(o(ζ)+β*u²*ζ+γ) + α²*L₁(ζ)
 
+	// 各个多项式的commit，G1 point
 	points := append(proof.Bsb22Commitments,
 		vk.Ql, vk.Qr, vk.Qm, vk.Qo, vk.Qk, // first part
 		vk.S[2], proof.Z, // second & third part
 	)
 
+	//各个多项式的值
 	qC := make([]fr.Element, len(proof.Bsb22Commitments))
-	copy(qC, proof.BatchedProof.ClaimedValues[7:])
+	copy(qC, proof.BatchedProof.ClaimedValues[7:]) //proof.BatchedProof.ClaimedValues[7:] = Bsb22Commitments 的打开值
 	scalars := append(qC,
 		l, r, rl, o, one, /* TODO Perf @Tabaie Consider just adding Qk instead */ // first part
 		_s1, _s2, // second & third part
 	)
 	if _, err := linearizedPolynomialDigest.MultiExp(points, scalars, ecc.MultiExpConfig{}); err != nil {
 		return err
-	}
+	} //FIXME: tod
 
 	// Fold the first proof
 	digestsToFold := make([]curve.G1Affine, len(vk.Qcp)+7)
 	copy(digestsToFold[7:], vk.Qcp)
-	digestsToFold[0] = foldedH
-	digestsToFold[1] = linearizedPolynomialDigest
+	digestsToFold[0] = foldedH                    //Comm(h₁) + ζᵐ⁺²*Comm(h₂) + ζ²⁽ᵐ⁺²⁾*Comm(h₃)
+	digestsToFold[1] = linearizedPolynomialDigest //
 	digestsToFold[2] = proof.LRO[0]
 	digestsToFold[3] = proof.LRO[1]
 	digestsToFold[4] = proof.LRO[2]
@@ -275,11 +367,11 @@ func Verify(proof *Proof, vk *VerifyingKey, publicWitness fr.Vector, opts ...bac
 		return err
 	}
 
-	// Batch verify
+	// Batch verify,
 	var shiftedZeta fr.Element
 	shiftedZeta.Mul(&zeta, &vk.Generator)
 	err = kzg.BatchVerifyMultiPoints([]kzg.Digest{
-		foldedDigest,
+		foldedDigest, // fold
 		proof.Z,
 	},
 		[]kzg.OpeningProof{

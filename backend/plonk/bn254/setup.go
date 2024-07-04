@@ -44,15 +44,15 @@ type VerifyingKey struct {
 	Kzg kzg.VerifyingKey
 
 	// cosetShift generator of the coset on the small domain
-	CosetShift fr.Element
+	CosetShift fr.Element //陪集shift， k1
 
-	// S commitments to S1, S2, S3
+	// S commitments to S1, S2, S3， //Plonkish中的置换约束
 	S [3]kzg.Digest
 
 	// Commitments to ql, qr, qm, qo, qcp prepended with as many zeroes (ones for l) as there are public inputs.
 	// In particular Qk is not complete.
-	Ql, Qr, Qm, Qo, Qk kzg.Digest
-	Qcp                []kzg.Digest
+	Ql, Qr, Qm, Qo, Qk kzg.Digest   //Ql, Qr, Qm, Qo, Qk 的G1上的承诺
+	Qcp                []kzg.Digest //Qcp 是什么？
 
 	CommitmentConstraintIndexes []uint64
 }
@@ -91,7 +91,7 @@ func Setup(spr *cs.SparseR1CS, srs, srsLagrange kzg.SRS) (*ProvingKey, *Verifyin
 	var pk ProvingKey
 	var vk VerifyingKey
 	pk.Vk = &vk
-	vk.CommitmentConstraintIndexes = internal.IntSliceToUint64Slice(spr.CommitmentInfo.CommitmentIndexes())
+	vk.CommitmentConstraintIndexes = internal.IntSliceToUint64Slice(spr.CommitmentInfo.CommitmentIndexes()) //将int64的slice 转换成uint64的slice
 
 	// step 0: set the fft domains
 	domain := initFFTDomain(spr)
@@ -358,7 +358,7 @@ func computePermutationPolynomials(trace *Trace, domain *fft.Domain) [3]*iop.Pol
 }
 
 // getSupportPermutation returns the support on which the permutation acts, it is
-// <g> || u<g> || u^{2}<g>
+// <g> || u<g> || u^{2}<g> #获得permutaiontable 的原始的表，即 [1, w, w^2, ....w^{domain.Cardinality}, k, k*w, k*w^2, ....k*w^{domain.Cardinality}, k^2, k^2*w, ....k^2*w^{domain.Cardinality}]
 func getSupportPermutation(domain *fft.Domain) []fr.Element {
 
 	res := make([]fr.Element, 3*domain.Cardinality)

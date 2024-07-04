@@ -19,7 +19,7 @@ type PlonkCommitment struct {
 }
 
 type Commitment interface{}
-type Commitments interface{ CommitmentIndexes() []int }
+type Commitments interface{ CommitmentIndexes() []int } //此接口定义了一个方法 CommitmentIndexes()，该方法返回一个整数切片
 
 type Groth16Commitments []Groth16Commitment
 type PlonkCommitments []PlonkCommitment

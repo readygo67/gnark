@@ -29,6 +29,7 @@ var (
 	SizeAccount = 160
 )
 
+// 一个账户包含index, nonce, balance, pubkey,
 // Account describes a rollup account
 type Account struct {
 	index   uint64 // index in the tree

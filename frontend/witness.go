@@ -24,11 +24,11 @@ func NewWitness(assignment Circuit, field *big.Int, opts ...WitnessOption) (witn
 	if err != nil {
 		return nil, err
 	}
-	if opt.publicOnly {
+	if opt.publicOnly { //如果opt.PublicOnly为true，只返回公共部分
 		s.Secret = 0
 	}
 
-	// allocate the witness
+	// allocate the witness, 返回
 	w, err := witness.New(field)
 	if err != nil {
 		return nil, err

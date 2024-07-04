@@ -26,6 +26,7 @@ import (
 	"github.com/consensys/gnark/test"
 )
 
+// 将Circuit 重命名为circuitSignature, 并重新定义 Define 函数
 type circuitSignature Circuit
 
 // Circuit implements part of the rollup circuit only by declaring a subset of the constraints
@@ -78,7 +79,7 @@ func TestCircuitSignature(t *testing.T) {
 
 	var signatureCircuit circuitSignature
 	for i := 0; i < BatchSizeCircuit; i++ {
-		signatureCircuit.MerkleProofReceiverBefore[i].Path = make([]frontend.Variable, depth)
+		signatureCircuit.MerkleProofReceiverBefore[i].Path = make([]frontend.Variable, depth) //对slice 赋值，让其
 		signatureCircuit.MerkleProofReceiverAfter[i].Path = make([]frontend.Variable, depth)
 		signatureCircuit.MerkleProofSenderBefore[i].Path = make([]frontend.Variable, depth)
 		signatureCircuit.MerkleProofSenderAfter[i].Path = make([]frontend.Variable, depth)
@@ -221,9 +222,9 @@ func TestCircuitUpdateAccount(t *testing.T) {
 
 func TestCircuitFull(t *testing.T) {
 
-	if testing.Short() {
-		t.Skip("skipping rollup tests for circleCI")
-	}
+	//if testing.Short() {
+	//	t.Skip("skipping rollup tests for circleCI")
+	//}
 
 	operator, users := createOperator(nbAccounts)
 
@@ -256,6 +257,57 @@ func TestCircuitFull(t *testing.T) {
 
 	assert := test.NewAssert(t)
 	// verifies the proofs of inclusion of the transfer
+
+	var rollupCircuit Circuit
+	for i := 0; i < BatchSizeCircuit; i++ {
+		rollupCircuit.MerkleProofReceiverBefore[i].Path = make([]frontend.Variable, depth)
+		rollupCircuit.MerkleProofReceiverAfter[i].Path = make([]frontend.Variable, depth)
+		rollupCircuit.MerkleProofSenderBefore[i].Path = make([]frontend.Variable, depth)
+		rollupCircuit.MerkleProofSenderAfter[i].Path = make([]frontend.Variable, depth)
+	}
+
+	// TODO full circuit has some unconstrained inputs, that's odd.
+	assert.ProverSucceeded(
+		&rollupCircuit,
+		&operator.witnesses,
+		test.WithCurves(ecc.BN254),
+		test.WithBackends(backend.GROTH16))
+
+}
+
+func TestCircuitFullBatch1(t *testing.T) {
+	assert := test.NewAssert(t)
+
+	operator, users := createOperator(nbAccounts)
+
+	for i := 0; i < BatchSizeCircuit; i++ {
+		// read accounts involved in the transfer
+		sender, err := operator.readAccount(0)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		receiver, err := operator.readAccount(uint64(i))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// create the transfer and sign it
+		amount := uint64(1 + i)
+		transfer := NewTransfer(amount, sender.pubKey, receiver.pubKey, sender.nonce)
+
+		// sign the transfer
+		_, err = transfer.Sign(users[0], operator.h)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// update the state from the received transfer
+		err = operator.updateState(transfer, i)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	var rollupCircuit Circuit
 	for i := 0; i < BatchSizeCircuit; i++ {

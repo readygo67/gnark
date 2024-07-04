@@ -45,14 +45,14 @@ func NewQueue(BatchSizeCircuit int) Queue {
 
 // Operator represents a rollup operator
 type Operator struct {
-	State      []byte            // list of accounts: index ∥ nonce ∥ balance ∥ pubkeyX ∥ pubkeyY, each chunk is 256 bits
-	HashState  []byte            // Hashed version of the state, each chunk is 256bits: ... ∥ H(index ∥ nonce ∥ balance ∥ pubkeyX ∥ pubkeyY)) ∥ ...
+	State      []byte            // list of accounts: index ∥ nonce ∥ balance ∥ pubkeyX ∥ pubkeyY, each chunk is 256 bits ,保存用户的原始状态
+	HashState  []byte            // Hashed version of the state, each chunk is 256bits: ... ∥ H(index ∥ nonce ∥ balance ∥ pubkeyX ∥ pubkeyY)) ∥ ... //保存用户
 	AccountMap map[string]uint64 // hashmap of all available accounts (the key is the account.pubkey.X), the value is the index of the account in the state
 	nbAccounts int               // number of accounts managed by this operator
 	h          hash.Hash         // hash function used to build the Merkle Tree
 	q          Queue             // queue of transfers
 	batch      int               // current number of transactions in a batch
-	witnesses  Circuit           // witnesses for the snark circuit
+	witnesses  Circuit           // witnesses for the snark circuit, 电路的assignment
 }
 
 // NewOperator creates a new operator.
@@ -96,13 +96,13 @@ func (o *Operator) readAccount(i uint64) (Account, error) {
 // numTransfer is the number of the transfer currently handled (between 0 and BatchSizeCircuit)
 func (o *Operator) updateState(t Transfer, numTransfer int) error {
 
-	var posSender, posReceiver uint64
+	var posSender, posReceiver uint64 //Position of the sender and receiver in the state
 	var ok bool
 
 	// ext := strconv.Itoa(numTransfer)
 	segmentSize := o.h.Size()
 
-	// read sender's account
+	// read sender's account, 从pubkey.X 获得对应的index， index 也记录在account的内部。
 	b := t.senderPubKey.A.X.Bytes()
 	if posSender, ok = o.AccountMap[string(b[:])]; !ok {
 		return ErrNonExistingAccount
@@ -147,9 +147,10 @@ func (o *Operator) updateState(t Transfer, numTransfer int) error {
 	o.witnesses.ReceiverAccountsBefore[numTransfer].Nonce = receiverAccount.nonce
 	o.witnesses.ReceiverAccountsBefore[numTransfer].Balance = receiverAccount.balance
 
+	// Build Merkle Tree proof for SenderBefore
 	//  Set witnesses for the proof of inclusion of sender and receivers account before update
 	var buf bytes.Buffer
-	_, err = buf.Write(o.HashState)
+	_, err = buf.Write(o.HashState) //old state
 	if err != nil {
 		return err
 	}
@@ -161,6 +162,7 @@ func (o *Operator) updateState(t Transfer, numTransfer int) error {
 	// verify the proof in plain go...
 	merkletree.VerifyProof(o.h, merkleRootBefore, proofInclusionSenderBefore, posSender, numLeaves)
 
+	// Build Merkle Tree proof for Receiver Before
 	buf.Reset() // the buffer needs to be reset
 	_, err = buf.Write(o.HashState)
 	if err != nil {
@@ -170,9 +172,10 @@ func (o *Operator) updateState(t Transfer, numTransfer int) error {
 	if err != nil {
 		return err
 	}
-	o.witnesses.RootHashesBefore[numTransfer] = merkleRootBefore
-	o.witnesses.MerkleProofReceiverBefore[numTransfer].RootHash = merkleRootBefore
-	o.witnesses.MerkleProofSenderBefore[numTransfer].RootHash = merkleRootBefore
+
+	o.witnesses.RootHashesBefore[numTransfer] = merkleRootBefore                   //Before Root
+	o.witnesses.MerkleProofReceiverBefore[numTransfer].RootHash = merkleRootBefore //Receiver Before Root
+	o.witnesses.MerkleProofSenderBefore[numTransfer].RootHash = merkleRootBefore   // Sender Before Root
 
 	for i := 0; i < len(proofInclusionSenderBefore); i++ {
 		o.witnesses.MerkleProofReceiverBefore[numTransfer].Path[i] = proofInclusionReceiverBefore[i]
@@ -187,7 +190,7 @@ func (o *Operator) updateState(t Transfer, numTransfer int) error {
 
 	// verifying the signature. The msg is the hash (o.h) of the transfer
 	// nonce ∥ amount ∥ senderpubKey(x&y) ∥ receiverPubkey(x&y)
-	resSig, err := t.Verify(o.h)
+	resSig, err := t.Verify(o.h) //verify
 	if err != nil {
 		return err
 	}
@@ -237,6 +240,7 @@ func (o *Operator) updateState(t Transfer, numTransfer int) error {
 	bufReceiver := o.h.Sum([]byte{})
 	copy(o.HashState[int(posReceiver)*o.h.Size():(int(posReceiver)+1)*o.h.Size()], bufReceiver)
 
+	//构造 sender After的Proof
 	//  Set witnesses for the proof of inclusion of sender and receivers account after update
 	buf.Reset()
 	_, err = buf.Write(o.HashState)
@@ -249,6 +253,7 @@ func (o *Operator) updateState(t Transfer, numTransfer int) error {
 	}
 	// merkleProofHelperSenderAfter := merkle.GenerateProofHelper(proofInclusionSenderAfter, posSender, numLeaves)
 
+	//构造 Receiver After的Proof
 	buf.Reset() // the buffer needs to be reset
 	_, err = buf.Write(o.HashState)
 	if err != nil {

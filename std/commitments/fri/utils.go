@@ -8,6 +8,7 @@ import (
 )
 
 // exp helper function that returns x^{e}
+// e is the bit representation of the e_val , e.g. if e_val = 3 then e = [1,1], res = x^3 = x * x * x
 func exp(api frontend.API, x frontend.Variable, e []frontend.Variable) frontend.Variable {
 
 	res := frontend.Variable(1)

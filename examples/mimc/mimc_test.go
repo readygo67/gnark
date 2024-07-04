@@ -15,6 +15,10 @@
 package mimc
 
 import (
+	"fmt"
+	"github.com/consensys/gnark-crypto/hash"
+	"math/big"
+	"math/rand"
 	"testing"
 
 	"github.com/consensys/gnark-crypto/ecc"
@@ -24,16 +28,17 @@ import (
 func TestPreimage(t *testing.T) {
 	assert := test.NewAssert(t)
 
-	var mimcCircuit Circuit
+	for i := 0; i < 10; i++ {
 
-	assert.ProverFailed(&mimcCircuit, &Circuit{
-		Hash:     42,
-		PreImage: 42,
-	})
-
-	assert.ProverSucceeded(&mimcCircuit, &Circuit{
-		PreImage: "16130099170765464552823636852555369511329944820189892919423002775646948828469",
-		Hash:     "12886436712380113721405259596386800092738845035233065858332878701083870690753",
-	}, test.WithCurves(ecc.BN254))
-
+		r := rand.Int63()
+		fmt.Printf("r: %v\n", r)
+		goMimc := hash.MIMC_BN254.New()
+		goMimc.Write(big.NewInt(r).Bytes())
+		h := goMimc.Sum(nil)
+		err := test.IsSolved(&Circuit{}, &Circuit{
+			PreImage: r,
+			Hash:     h,
+		}, ecc.BN254.ScalarField())
+		assert.NoError(err)
+	}
 }

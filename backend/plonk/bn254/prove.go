@@ -73,16 +73,17 @@ const (
 	id_S3
 	id_ID
 	id_LOne
-	id_Qci // [ .. , Qc_i, Pi_i, ...]
+	id_Qci // [ .. , Qc_i, Pi_i, ...]  //把FS 的输入当作公共输入
 )
 
 // blinding factors
+// 4个blind polynomial 分别对应Ql, Qr, Qc, Z
 const (
 	id_Bl int = iota
 	id_Br
 	id_Bo
 	id_Bz
-	nb_blinding_polynomials
+	nb_blinding_polynomials //blindling多项式的个数 =4
 )
 
 // blinding orders (-1 to deactivate)
@@ -136,9 +137,11 @@ func Prove(spr *cs.SparseR1CS, pk *ProvingKey, fullWitness witness.Witness, opts
 	}
 
 	// solve constraints
+	// 1.检查witness是否满足约束，如果满足，计算得到[a(x)], [b(x)], [c(x)]
 	g.Go(instance.solveConstraints)
 
 	// complete qk
+	// 2.构造Qc ={Qc, PublicInputs, 前一级电路的Commit Value}
 	g.Go(instance.completeQk)
 
 	// init blinding polynomials
@@ -159,7 +162,7 @@ func Prove(spr *cs.SparseR1CS, pk *ProvingKey, fullWitness witness.Witness, opts
 	// fold the commitment to H ([H₀] + ζᵐ⁺²*[H₁] + ζ²⁽ᵐ⁺²⁾[H₂])
 	g.Go(instance.foldH)
 
-	// linearized polynomial
+	// linearized polynomial，对应round4
 	g.Go(instance.computeLinearizedPolynomial)
 
 	// Batch opening
@@ -173,7 +176,7 @@ func Prove(spr *cs.SparseR1CS, pk *ProvingKey, fullWitness witness.Witness, opts
 	return instance.proof, nil
 }
 
-// represents a Prover instance
+// represents a Prover instance， Prover实例
 type instance struct {
 	ctx context.Context
 
@@ -209,16 +212,16 @@ type instance struct {
 	gamma, beta, alpha, zeta fr.Element
 
 	// channel to wait for the steps
-	chLRO,
-	chQk,
-	chbp,
-	chZ,
-	chH,
-	chRestoreLRO,
-	chZOpening,
-	chLinearizedPolynomial,
-	chFoldedH,
-	chGammaBeta chan struct{}
+	chLRO, //计算L/R/O commit 的计算
+	chQk, // 使用本电路的Qc，PI和bs22commit 完成Qc
+	chbp, //初始化blindingpolynomial
+	chZ, // 完成z(x)(permuation polynomial)多项式 commit的计算
+	chH, //完成商多项式Hlo(x) ,Hmid(x), Hhi(x) 3个多项式commit的计算
+	chRestoreLRO, //完成h(x) = f(x)/Zh(x)的计算中的f(x)的计算
+	chZOpening, // 完成计算 z(x) 在 (zeta * w) 处的值和打开证明
+	chLinearizedPolynomial, //计算线性化多项式的计算
+	chFoldedH, // 完成折叠版foldedHDigest 和FoldedH的计算
+	chGammaBeta chan struct{} //计算得到 chGammaBeta
 
 	domain0, domain1 *fft.Domain
 
@@ -232,7 +235,7 @@ func newInstance(ctx context.Context, spr *cs.SparseR1CS, pk *ProvingKey, fullWi
 	s := instance{
 		ctx:                    ctx,
 		pk:                     pk,
-		proof:                  &Proof{},
+		proof:                  &Proof{}, //空的proof
 		spr:                    spr,
 		opt:                    opts,
 		fullWitness:            fullWitness,
@@ -252,7 +255,7 @@ func newInstance(ctx context.Context, spr *cs.SparseR1CS, pk *ProvingKey, fullWi
 		chRestoreLRO:           make(chan struct{}, 1),
 	}
 	s.initBSB22Commitments()
-	s.x = make([]*iop.Polynomial, id_Qci+2*len(s.commitmentInfo))
+	s.x = make([]*iop.Polynomial, id_Qci+2*len(s.commitmentInfo)) //这个实例有多少个polynomial
 
 	// init fft domains
 	nbConstraints := spr.GetNbConstraints()
@@ -276,6 +279,7 @@ func newInstance(ctx context.Context, spr *cs.SparseR1CS, pk *ProvingKey, fullWi
 	return &s, nil
 }
 
+// 构造a(x), b(x), c(x), z(x)的blinding 多项式
 func (s *instance) initBlindingPolynomials() error {
 	s.bp[id_Bl] = getRandomPolynomial(order_blinding_L)
 	s.bp[id_Br] = getRandomPolynomial(order_blinding_R)
@@ -336,8 +340,12 @@ func (s *instance) bsb22Hint(_ *big.Int, ins, outs []*big.Int) error {
 
 // solveConstraints computes the evaluation of the polynomials L, R, O
 // and sets x[id_L], x[id_R], x[id_O] in canonical form
+// step1: spr.Solve 直接计算看这个电路是否能解决，
+// step2: 插值得到a(x), b(x), c(x) 方程
+// step3: 对a(x), b(x), c(x) 做承诺得到proof.LRO的3个值
+
 func (s *instance) solveConstraints() error {
-	_solution, err := s.spr.Solve(s.fullWitness, s.opt.SolverOpts...)
+	_solution, err := s.spr.Solve(s.fullWitness, s.opt.SolverOpts...) //直接计算看能否解决
 	if err != nil {
 		return err
 	}
@@ -368,16 +376,17 @@ func (s *instance) solveConstraints() error {
 	return nil
 }
 
+// 构造处Qc, Qc的系数包含本电路中的Qc,Pi 和 bsb22 commitment的evaluation 值，
 func (s *instance) completeQk() error {
 	qk := s.trace.Qk.Clone()
-	qkCoeffs := qk.Coefficients()
+	qkCoeffs := qk.Coefficients() //获取的是指针，所以能将Pi和前一级电路的commit也融入到Qc中
 
 	wWitness, ok := s.fullWitness.Vector().(fr.Vector)
 	if !ok {
 		return witness.ErrInvalidWitness
 	}
 
-	copy(qkCoeffs, wWitness[:len(s.spr.Public)])
+	copy(qkCoeffs, wWitness[:len(s.spr.Public)]) //
 
 	// wait for solver to be done
 	select {
@@ -387,7 +396,7 @@ func (s *instance) completeQk() error {
 	}
 
 	for i := range s.commitmentInfo {
-		qkCoeffs[s.spr.GetNbPublicVariables()+s.commitmentInfo[i].CommitmentIndex] = s.commitmentVal[i]
+		qkCoeffs[s.spr.GetNbPublicVariables()+s.commitmentInfo[i].CommitmentIndex] = s.commitmentVal[i] //把
 	}
 
 	s.x[id_Qk] = qk
@@ -431,6 +440,7 @@ func (s *instance) deriveGammaAndBeta() error {
 		return witness.ErrInvalidWitness
 	}
 
+	//准备gamma的数据源，vk 中的s1/s2/s3, Ql, Qr, Qm, Qo, Qk, Qcp （G1Affine） 和 public input(Fr.Element) 几个绑定进去
 	if err := bindPublicData(s.fs, "gamma", s.pk.Vk, wWitness[:len(s.spr.Public)]); err != nil {
 		return err
 	}
@@ -442,11 +452,13 @@ func (s *instance) deriveGammaAndBeta() error {
 	case <-s.chLRO:
 	}
 
+	//将[a(x)], [b(x)], [c(x)] 3个G1的点绑定到
+	//gamma = hash("gamma", s1,s2,s3,Ql,Qr,Qm,Qo,Qk,Qcp,Pi,[a(x)],[b(x)],[c(x)])
 	gamma, err := deriveRandomness(s.fs, "gamma", &s.proof.LRO[0], &s.proof.LRO[1], &s.proof.LRO[2])
 	if err != nil {
 		return err
 	}
-
+	//beta = hash("beta", gamma.value)
 	bbeta, err := s.fs.ComputeChallenge("beta")
 	if err != nil {
 		return err
@@ -485,14 +497,15 @@ func (s *instance) deriveAlpha() (err error) {
 	return err
 }
 
+// zeta = hash("zeta", previousValue, h0,h1,h2)
 func (s *instance) deriveZeta() (err error) {
 	s.zeta, err = deriveRandomness(s.fs, "zeta", &s.proof.H[0], &s.proof.H[1], &s.proof.H[2])
 	return
 }
 
-// evaluateConstraints computes H
+// evaluateConstraints computes H, 计算出商多项式h=(h0||h1||h2) 和得到zeta
 func (s *instance) evaluateConstraints() (err error) {
-	s.x[id_Ql] = s.trace.Ql
+	s.x[id_Ql] = s.trace.Ql //获得ql，Qr，Qm
 	s.x[id_Qr] = s.trace.Qr
 	s.x[id_Qm] = s.trace.Qm
 	s.x[id_Qo] = s.trace.Qo
@@ -500,13 +513,14 @@ func (s *instance) evaluateConstraints() (err error) {
 	s.x[id_S2] = s.trace.S2
 	s.x[id_S3] = s.trace.S3
 
+	//注意Qcp和Pi的顺序是[...,Qcp1,Pi1, Qcp2, Pi2,...]
 	for i := 0; i < len(s.commitmentInfo); i++ {
 		s.x[id_Qci+2*i] = s.trace.Qcp[i]
 	}
 
 	n := s.domain0.Cardinality
 	lone := make([]fr.Element, n)
-	lone[0].SetOne()
+	lone[0].SetOne() //[1, 0,0,....]
 
 	// wait for solver to be done
 	select {
@@ -533,17 +547,17 @@ func (s *instance) evaluateConstraints() (err error) {
 
 	// TODO complete waste of memory find another way to do that
 	identity := make([]fr.Element, n)
-	identity[1].Set(&s.beta)
+	identity[1].Set(&s.beta) //[0, beta, 0,...]
 
 	s.x[id_ID] = iop.NewPolynomial(&identity, iop.Form{Basis: iop.Canonical, Layout: iop.Regular})
 	s.x[id_LOne] = iop.NewPolynomial(&lone, iop.Form{Basis: iop.Lagrange, Layout: iop.Regular})
-	s.x[id_ZS] = s.x[id_Z].ShallowClone().Shift(1)
+	s.x[id_ZS] = s.x[id_Z].ShallowClone().Shift(1) //
 
-	numerator, err := s.computeNumerator()
+	numerator, err := s.computeNumerator() //计算分子多项式
 	if err != nil {
 		return err
 	}
-
+	// 计算得到商多项式
 	s.h, err = divideByXMinusOne(numerator, [2]*fft.Domain{s.domain0, s.domain1})
 	if err != nil {
 		return err
@@ -570,6 +584,7 @@ func (s *instance) evaluateConstraints() (err error) {
 	return nil
 }
 
+// buildRatioCopyConstraint 计算z(x)多项式的承诺proof.Z
 func (s *instance) buildRatioCopyConstraint() (err error) {
 	// wait for gamma and beta to be derived (or ctx.Done())
 	select {
@@ -596,7 +611,7 @@ func (s *instance) buildRatioCopyConstraint() (err error) {
 		return err
 	}
 
-	// commit to the blinded version of z
+	// commit to the blinded version of z， 计算得到permutation polynomial 的承诺
 	s.proof.Z, err = s.commitToPolyAndBlinding(s.x[id_Z], s.bp[id_Bz])
 
 	close(s.chZ)
@@ -604,7 +619,7 @@ func (s *instance) buildRatioCopyConstraint() (err error) {
 	return
 }
 
-// open Z (blinded) at ωζ
+// open Z (blinded) at ωζ， 在打开z(zeta *w) 并提供proof
 func (s *instance) openZ() (err error) {
 	// wait for H to be committed and zeta to be derived (or ctx.Done())
 	select {
@@ -613,10 +628,10 @@ func (s *instance) openZ() (err error) {
 	case <-s.chH:
 	}
 	var zetaShifted fr.Element
-	zetaShifted.Mul(&s.zeta, &s.pk.Vk.Generator)
-	s.blindedZ = getBlindedCoefficients(s.x[id_Z], s.bp[id_Bz])
+	zetaShifted.Mul(&s.zeta, &s.pk.Vk.Generator)                //zetaw = zeta * w
+	s.blindedZ = getBlindedCoefficients(s.x[id_Z], s.bp[id_Bz]) //获得blind后的permutation 多项式，
 	// open z at zeta
-	s.proof.ZShiftedOpening, err = kzg.Open(s.blindedZ, zetaShifted, s.pk.Kzg)
+	s.proof.ZShiftedOpening, err = kzg.Open(s.blindedZ, zetaShifted, s.pk.Kzg) //得到z(wx) 在zeta*w 点处值和打开证明。
 	if err != nil {
 		return err
 	}
@@ -639,7 +654,7 @@ func (s *instance) h3() []fr.Element {
 	return h3
 }
 
-// fold the commitment to H ([H₀] + ζᵐ⁺²*[H₁] + ζ²⁽ᵐ⁺²⁾[H₂])
+// 计算折叠版的h fold H = (H₀ + ζᵐ⁺²*H₁ + ζ²⁽ᵐ⁺²⁾H₂))，同时计算折叠版H的 commit = ([H₀] + ζᵐ⁺²*[H₁] + ζ²⁽ᵐ⁺²⁾[H₂])
 func (s *instance) foldH() error {
 	// wait for H to be committed and zeta to be derived (or ctx.Done())
 	select {
@@ -654,16 +669,18 @@ func (s *instance) foldH() error {
 	zetaPowerNplusTwo.Exp(s.zeta, &n)
 	zetaPowerNplusTwo.BigInt(&n)
 
+	//这一段是commit 的计算，= ζ²⁽ᵐ⁺²⁾*Comm(h3) + ζᵐ⁺²*Comm(h2) + Comm(h1)
 	s.foldedHDigest.ScalarMultiplication(&s.proof.H[2], &n)
 	s.foldedHDigest.Add(&s.foldedHDigest, &s.proof.H[1])       // ζᵐ⁺²*Comm(h3)
 	s.foldedHDigest.ScalarMultiplication(&s.foldedHDigest, &n) // ζ²⁽ᵐ⁺²⁾*Comm(h3) + ζᵐ⁺²*Comm(h2)
 	s.foldedHDigest.Add(&s.foldedHDigest, &s.proof.H[0])
 
-	// fold H (H₀ + ζᵐ⁺²*H₁ + ζ²⁽ᵐ⁺²⁾H₂))
+	// fold H = (H₀ + ζᵐ⁺²*H₁ + ζ²⁽ᵐ⁺²⁾H₂))
 	h1 := s.h1()
 	h2 := s.h2()
 	s.foldedH = s.h3()
 
+	//使用zeta 计算折叠版的H， 未折叠的H的是3n+5次，折叠版的H 次数是n+2
 	for i := 0; i < int(s.domain0.Cardinality)+2; i++ {
 		s.foldedH[i].
 			Mul(&s.foldedH[i], &zetaPowerNplusTwo).
@@ -677,6 +694,9 @@ func (s *instance) foldH() error {
 	return nil
 }
 
+// linearizedPolynomial =   [ l(ζ)*Ql(X) + l(ζ)r(ζ)*Qm(X) + r(ζ)*Qr(X) +O(ζ)*Qo(X) + Qc(x) +Qcp(x)]
+//   - α*[ (l(ζ)+β*s1(ζ)+γ)*(r(ζ)+β*s2(ζ)+γ)*Z(μζ)*s3(X) - Z(X)*(l(ζ)+β*ζ+γ)*(r(ζ)+β*u*ζ+γ)*(o(ζ)+β*u²*ζ+γ))]
+//   - z(x) * α²*L₁(ζ)
 func (s *instance) computeLinearizedPolynomial() error {
 
 	// wait for H to be committed and zeta to be derived (or ctx.Done())
@@ -693,23 +713,23 @@ func (s *instance) computeLinearizedPolynomial() error {
 
 	for i := 0; i < len(s.commitmentInfo); i++ {
 		go func(i int) {
-			qcpzeta[i] = s.trace.Qcp[i].Evaluate(s.zeta)
+			qcpzeta[i] = s.trace.Qcp[i].Evaluate(s.zeta) //在zeta 处打开各个Qcp。
 			wg.Done()
 		}(i)
 	}
 
 	go func() {
-		blzeta = evaluateBlinded(s.x[id_L], s.bp[id_Bl], s.zeta)
+		blzeta = evaluateBlinded(s.x[id_L], s.bp[id_Bl], s.zeta) //在zeta处打开a(x)
 		wg.Done()
 	}()
 
 	go func() {
-		brzeta = evaluateBlinded(s.x[id_R], s.bp[id_Br], s.zeta)
+		brzeta = evaluateBlinded(s.x[id_R], s.bp[id_Br], s.zeta) //在zeta处打开b(x)
 		wg.Done()
 	}()
 
 	go func() {
-		bozeta = evaluateBlinded(s.x[id_O], s.bp[id_Bo], s.zeta)
+		bozeta = evaluateBlinded(s.x[id_O], s.bp[id_Bo], s.zeta) //在zeta处打开c(x)
 		wg.Done()
 	}()
 
@@ -719,10 +739,12 @@ func (s *instance) computeLinearizedPolynomial() error {
 		return errContextDone
 	case <-s.chZOpening:
 	}
-	bzuzeta := s.proof.ZShiftedOpening.ClaimedValue
+	bzuzeta := s.proof.ZShiftedOpening.ClaimedValue //在zeta*w处打开z(x)
 
 	wg.Wait()
-
+	// linearizedPolynomial =   [ l(ζ)*Ql(X) + l(ζ)r(ζ)*Qm(X) + r(ζ)*Qr(X) +O(ζ)*Qo(X) + Qc(x) +Qcp(x)]
+	//       				+ α*[ (l(ζ)+β*s1(ζ)+γ)*(r(ζ)+β*s2(ζ)+γ)*Z(μζ)*s3(X) - Z(X)*(l(ζ)+β*ζ+γ)*(r(ζ)+β*u*ζ+γ)*(o(ζ)+β*u²*ζ+γ))]
+	//       				+ z(x) * α²*L₁(ζ)
 	s.linearizedPolynomial = s.innerComputeLinearizedPoly(
 		blzeta,
 		brzeta,
@@ -774,26 +796,27 @@ func (s *instance) batchOpening() error {
 	polysToOpen := make([][]fr.Element, 7+len(polysQcp))
 	copy(polysToOpen[7:], polysQcp)
 
-	polysToOpen[0] = s.foldedH
-	polysToOpen[1] = s.linearizedPolynomial
-	polysToOpen[2] = getBlindedCoefficients(s.x[id_L], s.bp[id_Bl])
-	polysToOpen[3] = getBlindedCoefficients(s.x[id_R], s.bp[id_Br])
-	polysToOpen[4] = getBlindedCoefficients(s.x[id_O], s.bp[id_Bo])
-	polysToOpen[5] = s.trace.S1.Coefficients()
-	polysToOpen[6] = s.trace.S2.Coefficients()
+	polysToOpen[0] = s.foldedH                                      //foldH的多项式 = h0 + h1*zeta^{m+2} + h2*zeta^2*(m+2)
+	polysToOpen[1] = s.linearizedPolynomial                         //zeta点的线性化多项式
+	polysToOpen[2] = getBlindedCoefficients(s.x[id_L], s.bp[id_Bl]) //a(x)
+	polysToOpen[3] = getBlindedCoefficients(s.x[id_R], s.bp[id_Br]) //b(x)
+	polysToOpen[4] = getBlindedCoefficients(s.x[id_O], s.bp[id_Bo]) //c(x)
+	polysToOpen[5] = s.trace.S1.Coefficients()                      //s1
+	polysToOpen[6] = s.trace.S2.Coefficients()                      //s2
 
 	digestsToOpen := make([]curve.G1Affine, len(s.pk.Vk.Qcp)+7)
 	copy(digestsToOpen[7:], s.pk.Vk.Qcp)
 
 	digestsToOpen[0] = s.foldedHDigest
 	digestsToOpen[1] = s.linearizedPolynomialDigest
-	digestsToOpen[2] = s.proof.LRO[0]
-	digestsToOpen[3] = s.proof.LRO[1]
-	digestsToOpen[4] = s.proof.LRO[2]
+	digestsToOpen[2] = s.proof.LRO[0] // [a(x)]
+	digestsToOpen[3] = s.proof.LRO[1] // [b(x)]
+	digestsToOpen[4] = s.proof.LRO[2] // [c(x)]
 	digestsToOpen[5] = s.pk.Vk.S[0]
 	digestsToOpen[6] = s.pk.Vk.S[1]
 
 	var err error
+	//bathopen
 	s.proof.BatchedProof, err = kzg.BatchOpenSinglePoint(
 		polysToOpen,
 		digestsToOpen,
@@ -808,6 +831,8 @@ func (s *instance) batchOpening() error {
 
 // evaluate the full set of constraints, all polynomials in x are back in
 // canonical regular form at the end
+// 计算  ql(X)L(X)+qr(X)R(X)+qm(X)L(X)R(X)+qo(X)O(X)+k(X) + α.(z(μX)*g₁(X)*g₂(X)*g₃(X)-z(X)*f₁(X)*f₂(X)*f₃(X)) + α**2*L₁(X)(Z(X)-1)
+
 func (s *instance) computeNumerator() (*iop.Polynomial, error) {
 	// init vectors that are used multiple times throughout the computation
 	n := s.domain0.Cardinality
@@ -836,6 +861,7 @@ func (s *instance) computeNumerator() (*iop.Polynomial, error) {
 
 	nbBsbGates := (len(s.x) - id_Qci + 1) >> 1
 
+	//计算门约束， ql(X)L(X)+qr(X)R(X)+qm(X)L(X)R(X)+qo(X)O(X)+k(X) + α.(z(μX)*g₁(X)*g₂(X)*g₃(X)-z(X)*f₁(X)*f₂(X)*f₃(X)) + α**2*L₁(X)(Z(X)-1)
 	gateConstraint := func(u ...fr.Element) fr.Element {
 
 		var ic, tmp fr.Element
@@ -858,32 +884,33 @@ func (s *instance) computeNumerator() (*iop.Polynomial, error) {
 	var cs, css fr.Element
 	cs.Set(&s.domain1.FrMultiplicativeGen)
 	css.Square(&cs)
-
+	fmt.Printf("cs.uint64()=%v, css.uint64()=%v\n", cs.Uint64(), css.Uint64())
+	//置换约束, u是一个变长的Fr.Element数组
 	orderingConstraint := func(u ...fr.Element) fr.Element {
 		gamma := s.gamma
 
 		var a, b, c, r, l fr.Element
 
-		a.Add(&gamma, &u[id_L]).Add(&a, &u[id_ID])
-		b.Mul(&u[id_ID], &cs).Add(&b, &u[id_R]).Add(&b, &gamma)
-		c.Mul(&u[id_ID], &css).Add(&c, &u[id_O]).Add(&c, &gamma)
-		r.Mul(&a, &b).Mul(&r, &c).Mul(&r, &u[id_Z])
+		a.Add(&gamma, &u[id_L]).Add(&a, &u[id_ID])               //此处的u[id_ID]是乘beta后的结果 a= [a(x)+beta*x+gamma]
+		b.Mul(&u[id_ID], &cs).Add(&b, &u[id_R]).Add(&b, &gamma)  // b= [b(x)+beta*k*x+gamma]
+		c.Mul(&u[id_ID], &css).Add(&c, &u[id_O]).Add(&c, &gamma) // c= [c(x)+beta*k^2*x+gamma]
+		r.Mul(&a, &b).Mul(&r, &c).Mul(&r, &u[id_Z])              // r= [a(x)+beta*x+gamma]*[b(x)+beta*k*x+gamma]*[c(x)+beta*k^2*x+gamma]*z(x)
 
-		a.Add(&u[id_S1], &u[id_L]).Add(&a, &gamma)
-		b.Add(&u[id_S2], &u[id_R]).Add(&b, &gamma)
-		c.Add(&u[id_S3], &u[id_O]).Add(&c, &gamma)
-		l.Mul(&a, &b).Mul(&l, &c).Mul(&l, &u[id_ZS])
+		a.Add(&u[id_S1], &u[id_L]).Add(&a, &gamma)   // a= [a(x)+s1(x)+gamma]
+		b.Add(&u[id_S2], &u[id_R]).Add(&b, &gamma)   // b= [b(x)+s2(x)+gamma]
+		c.Add(&u[id_S3], &u[id_O]).Add(&c, &gamma)   // c= [c(x)+s3(x)+gamma]
+		l.Mul(&a, &b).Mul(&l, &c).Mul(&l, &u[id_ZS]) // l= [a(x)+s1(x)+gamma]*[b(x)+s2(x)+gamma]*[c(x)+s3(x)+gamma]*z(wx)
 
-		l.Sub(&l, &r)
+		l.Sub(&l, &r) //l = [a(x)+s1(x)+gamma]*[b(x)+s2(x)+gamma]*[c(x)+s3(x)+gamma]*z(wx) - [a(x)+beta*x+gamma]*[b(x)+beta*k*x+gamma]*[c(x)+beta*k^2*x+gamma]*z(x)
 
 		return l
 	}
-
+	//firstLine约束
 	ratioLocalConstraint := func(u ...fr.Element) fr.Element {
 
 		var res fr.Element
 		res.SetOne()
-		res.Sub(&u[id_Z], &res).Mul(&res, &u[id_LOne])
+		res.Sub(&u[id_Z], &res).Mul(&res, &u[id_LOne]) //res = L1(x) * (z(x) - 1)
 
 		return res
 	}
@@ -1128,8 +1155,8 @@ func evaluateBlinded(p, bp *iop.Polynomial, zeta fr.Element) fr.Element {
 	// Multiply the evaluated blinded polynomial by tempElement
 	var t fr.Element
 	one := fr.One()
-	t.Exp(zeta, n).Sub(&t, &one)
-	bpEvaluatedAtZeta.Mul(&bpEvaluatedAtZeta, &t)
+	t.Exp(zeta, n).Sub(&t, &one)                  //t = zeta^n -1
+	bpEvaluatedAtZeta.Mul(&bpEvaluatedAtZeta, &t) //bpEvaluatedAtZeta = bpEvaluatedAtZeta * (zeta^n -1)
 
 	// Add the evaluated polynomial and the evaluated blinded polynomial
 	<-chP
@@ -1173,7 +1200,7 @@ func getRandomPolynomial(n int) *iop.Polynomial {
 		a := make([]fr.Element, 1)
 		a[0].SetZero()
 	} else {
-		a = make([]fr.Element, n+1)
+		a = make([]fr.Element, n+1) //注意是n+1，对于a(x)，他的blindPoly 就是(b0+b1*x)
 		for i := 0; i <= n; i++ {
 			a[i].SetRandom()
 		}
@@ -1279,20 +1306,20 @@ func evaluateXnMinusOneDomainBigCoset(domains [2]*fft.Domain) []fr.Element {
 // The Linearized polynomial is:
 //
 // α²*L₁(ζ)*Z(X)
-// + α*( (l(ζ)+β*s1(ζ)+γ)*(r(ζ)+β*s2(ζ)+γ)*Z(μζ)*s3(X) - Z(X)*(l(ζ)+β*id1(ζ)+γ)*(r(ζ)+β*id2(ζ)+γ)*(o(ζ)+β*id3(ζ)+γ))
+// + α*( (l(ζ)+β*s1(ζ)+γ)*(r(ζ)+β*s2(ζ)+γ)*Z(μζ)*β*s3(X) - Z(X)*(l(ζ)+β*id1(ζ)+γ)*(r(ζ)+β*id2(ζ)+γ)*(o(ζ)+β*id3(ζ)+γ))
 // + l(ζ)*Ql(X) + l(ζ)r(ζ)*Qm(X) + r(ζ)*Qr(X) + o(ζ)*Qo(X) + Qk(X)
 func (s *instance) innerComputeLinearizedPoly(lZeta, rZeta, oZeta, alpha, beta, gamma, zeta, zu fr.Element, qcpZeta, blindedZCanonical []fr.Element, pi2Canonical [][]fr.Element, pk *ProvingKey) []fr.Element {
 	// TODO @gbotrel rename
 	// first part: individual constraints
 	var rl fr.Element
-	rl.Mul(&rZeta, &lZeta)
+	rl.Mul(&rZeta, &lZeta) //rl= l(ζ)r(ζ)
 
 	// second part:
 	// Z(μζ)(l(ζ)+β*s1(ζ)+γ)*(r(ζ)+β*s2(ζ)+γ)*β*s3(X)-Z(X)(l(ζ)+β*id1(ζ)+γ)*(r(ζ)+β*id2(ζ)+γ)*(o(ζ)+β*id3(ζ)+γ)
 	var s1, s2 fr.Element
-	chS1 := make(chan struct{}, 1)
+	chS1 := make(chan struct{}, 1) //使用chan 来保证线程的计算也完成了
 	go func() {
-		s1 = s.trace.S1.Evaluate(zeta)                       // s1(ζ)
+		s1 = s.trace.S1.Evaluate(zeta)                       // s1(ζ)，在ζ处打开s1
 		s1.Mul(&s1, &beta).Add(&s1, &lZeta).Add(&s1, &gamma) // (l(ζ)+β*s1(ζ)+γ)
 		close(chS1)
 	}()
@@ -1300,30 +1327,30 @@ func (s *instance) innerComputeLinearizedPoly(lZeta, rZeta, oZeta, alpha, beta, 
 	tmp := s.trace.S2.Evaluate(zeta)                         // s2(ζ)
 	tmp.Mul(&tmp, &beta).Add(&tmp, &rZeta).Add(&tmp, &gamma) // (r(ζ)+β*s2(ζ)+γ)
 	<-chS1
-	s1.Mul(&s1, &tmp).Mul(&s1, &zu).Mul(&s1, &beta) // (l(ζ)+β*s1(β)+γ)*(r(ζ)+β*s2(β)+γ)*β*Z(μζ)
+	s1.Mul(&s1, &tmp).Mul(&s1, &zu).Mul(&s1, &beta) // (l(ζ)+β*s1(ζ)+γ)*(r(ζ)+β*s2(ζ)+γ)*β*Z(μζ)， s1 此时是s3(x)的系数
 
 	var uzeta, uuzeta fr.Element
-	uzeta.Mul(&zeta, &pk.Vk.CosetShift)
-	uuzeta.Mul(&uzeta, &pk.Vk.CosetShift)
+	uzeta.Mul(&zeta, &pk.Vk.CosetShift)   //uzeta = k*ζ
+	uuzeta.Mul(&uzeta, &pk.Vk.CosetShift) //uuzeta = k^2*ζ
 
 	s2.Mul(&beta, &zeta).Add(&s2, &lZeta).Add(&s2, &gamma)      // (l(ζ)+β*ζ+γ)
 	tmp.Mul(&beta, &uzeta).Add(&tmp, &rZeta).Add(&tmp, &gamma)  // (r(ζ)+β*u*ζ+γ)
 	s2.Mul(&s2, &tmp)                                           // (l(ζ)+β*ζ+γ)*(r(ζ)+β*u*ζ+γ)
 	tmp.Mul(&beta, &uuzeta).Add(&tmp, &oZeta).Add(&tmp, &gamma) // (o(ζ)+β*u²*ζ+γ)
 	s2.Mul(&s2, &tmp)                                           // (l(ζ)+β*ζ+γ)*(r(ζ)+β*u*ζ+γ)*(o(ζ)+β*u²*ζ+γ)
-	s2.Neg(&s2)                                                 // -(l(ζ)+β*ζ+γ)*(r(ζ)+β*u*ζ+γ)*(o(ζ)+β*u²*ζ+γ)
+	s2.Neg(&s2)                                                 // -(l(ζ)+β*ζ+γ)*(r(ζ)+β*u*ζ+γ)*(o(ζ)+β*u²*ζ+γ) s2此时是Z(x)的系数
 
-	// third part L₁(ζ)*α²*Z
+	// third part L₁(ζ)*α²*Z(x)
 	var lagrangeZeta, one, den, frNbElmt fr.Element
 	one.SetOne()
 	nbElmt := int64(s.domain0.Cardinality)
 	lagrangeZeta.Set(&zeta).
 		Exp(lagrangeZeta, big.NewInt(nbElmt)).
-		Sub(&lagrangeZeta, &one)
+		Sub(&lagrangeZeta, &one) // 分子 = zeta^n -1
 	frNbElmt.SetUint64(uint64(nbElmt))
-	den.Sub(&zeta, &one).
-		Inverse(&den)
-	lagrangeZeta.Mul(&lagrangeZeta, &den). // L₁ = (ζⁿ⁻¹)/(ζ-1)
+	den.Sub(&zeta, &one). //den = 1/(ζ-1)
+				Inverse(&den)
+	lagrangeZeta.Mul(&lagrangeZeta, &den). // L₁ = (ζⁿ⁻¹)/n(ζ-1)
 						Mul(&lagrangeZeta, &alpha).
 						Mul(&lagrangeZeta, &alpha).
 						Mul(&lagrangeZeta, &s.domain0.CardinalityInv) // (1/n)*α²*L₁(ζ)
@@ -1348,37 +1375,42 @@ func (s *instance) innerComputeLinearizedPoly(lZeta, rZeta, oZeta, alpha, beta, 
 
 			if i < len(s3canonical) {
 
-				t0.Mul(&s3canonical[i], &s1) // (l(ζ)+β*s1(ζ)+γ)*(r(ζ)+β*s2(ζ)+γ)*Z(μζ)*β*s3(X)
+				t0.Mul(&s3canonical[i], &s1) // t0 = (l(ζ)+β*s1(ζ)+γ)*(r(ζ)+β*s2(ζ)+γ)*Z(μζ)*β*s3(X)
 
 				t.Add(&t, &t0)
 			}
 
+			//t 此时为 α 对应的多项式
 			t.Mul(&t, &alpha) // α*( (l(ζ)+β*s1(ζ)+γ)*(r(ζ)+β*s2(ζ)+γ)*Z(μζ)*s3(X) - Z(X)*(l(ζ)+β*ζ+γ)*(r(ζ)+β*u*ζ+γ)*(o(ζ)+β*u²*ζ+γ))
 
 			if i < len(cqm) {
 
-				t1.Mul(&cqm[i], &rl) // linPol = linPol + l(ζ)r(ζ)*Qm(X)
+				t1.Mul(&cqm[i], &rl) //t1 =  l(ζ)r(ζ)*Qm(X)
 
-				t0.Mul(&cql[i], &lZeta)
-				t0.Add(&t0, &t1)
+				t0.Mul(&cql[i], &lZeta) //t0 = l(ζ)*Ql(X)
+				t0.Add(&t0, &t1)        //t0 = l(ζ)*Ql(X)+l(ζ)r(ζ)*Qm(X)
 
-				t.Add(&t, &t0) // linPol = linPol + l(ζ)*Ql(X)
+				t.Add(&t, &t0) //  t = α*( (l(ζ)+β*s1(ζ)+γ)*(r(ζ)+β*s2(ζ)+γ)*Z(μζ)*s3(X) - Z(X)*(l(ζ)+β*ζ+γ)*(r(ζ)+β*u*ζ+γ)*(o(ζ)+β*u²*ζ+γ)) + l(ζ)*Ql(X)+l(ζ)r(ζ)*Qm(X)
 
 				t0.Mul(&cqr[i], &rZeta)
-				t.Add(&t, &t0) // linPol = linPol + r(ζ)*Qr(X)
+				t.Add(&t, &t0) // t = α*( (l(ζ)+β*s1(ζ)+γ)*(r(ζ)+β*s2(ζ)+γ)*Z(μζ)*s3(X) - Z(X)*(l(ζ)+β*ζ+γ)*(r(ζ)+β*u*ζ+γ)*(o(ζ)+β*u²*ζ+γ)) + l(ζ)*Ql(X)+l(ζ)r(ζ)*Qm(X) + r(ζ)*Qr(X)
 
-				t0.Mul(&cqo[i], &oZeta)
-				t0.Add(&t0, &cqk[i])
+				t0.Mul(&cqo[i], &oZeta) //t0 = O(ζ)*Qo(X)
+				t0.Add(&t0, &cqk[i])    // t0 = O(ζ)*Qo(X) + Qc(x)
 
-				t.Add(&t, &t0) // linPol = linPol + o(ζ)*Qo(X) + Qk(X)
+				t.Add(&t, &t0) //  t = α*( (l(ζ)+β*s1(ζ)+γ)*(r(ζ)+β*s2(ζ)+γ)*Z(μζ)*s3(X) - Z(X)*(l(ζ)+β*ζ+γ)*(r(ζ)+β*u*ζ+γ)*(o(ζ)+β*u²*ζ+γ)) + l(ζ)*Ql(X)+l(ζ)r(ζ)*Qm(X) + r(ζ)*Qr(X) +O(ζ)*Qo(X) + Qc(x)
 
+				//计算Qcp多项式
 				for j := range qcpZeta {
 					t0.Mul(&pi2Canonical[j][i], &qcpZeta[j])
 					t.Add(&t, &t0)
 				}
 			}
 
-			t0.Mul(&blindedZCanonical[i], &lagrangeZeta)
+			t0.Mul(&blindedZCanonical[i], &lagrangeZeta) //t0 = z(x) * α²*L₁(ζ)
+			// res =   [ l(ζ)*Ql(X) + l(ζ)r(ζ)*Qm(X) + r(ζ)*Qr(X) +O(ζ)*Qo(X) + Qc(x) +Qcp(x)]
+			//       + α*[ (l(ζ)+β*s1(ζ)+γ)*(r(ζ)+β*s2(ζ)+γ)*Z(μζ)*s3(X) - Z(X)*(l(ζ)+β*ζ+γ)*(r(ζ)+β*u*ζ+γ)*(o(ζ)+β*u²*ζ+γ))]
+			//       + z(x) * α²*L₁(ζ)
 			blindedZCanonical[i].Add(&t, &t0) // finish the computation
 		}
 	})
